@@ -1,2 +1,4 @@
 myenv/
 __pycache__/
+build/
+*.spec
