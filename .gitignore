@@ -2,6 +2,7 @@ myenv/
 venv/
 __pycache__/
 build/
+dist/
 *.spec
 history.json
 YouTubeDownloader.spec

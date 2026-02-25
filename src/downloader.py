@@ -1,6 +1,21 @@
 import yt_dlp
 import os
 import time
+import sys
+
+def get_ffmpeg_path():
+    """Devuelve la ruta de ffmpeg, dentro del exe o en el sistema"""
+    if getattr(sys, 'frozen', False):
+        # Estamos dentro de un exe generado por PyInstaller
+        base_path = sys._MEIPASS
+    else:
+        # Estamos en desarrollo normal
+        base_path = os.path.join(os.path.dirname(__file__), '..')
+    
+    ffmpeg = os.path.join(base_path, 'ffmpeg.exe')
+    if os.path.exists(ffmpeg):
+        return base_path
+    return None
 
 def get_video_info(url: str) -> dict:
     """Obtiene información del vídeo sin descargarlo"""
@@ -55,6 +70,9 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             'quiet': True,
             'no_warnings': True,
         }
+        ffmpeg_location = get_ffmpeg_path()
+        if ffmpeg_location:
+            ydl_opts['ffmpeg_location'] = ffmpeg_location
     else:
         height = quality.replace('p', '')
         ydl_opts = {
@@ -65,7 +83,9 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             'quiet': True,
             'no_warnings': True,
         }
-
+        ffmpeg_location = get_ffmpeg_path()
+        if ffmpeg_location:
+            ydl_opts['ffmpeg_location'] = ffmpeg_location
     downloaded_file = []
 
     def progress_hook(d):
