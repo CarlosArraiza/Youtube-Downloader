@@ -8,7 +8,6 @@ os.makedirs(DATA_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
 
 def load_history() -> list:
-    """Carga el historial desde el archivo JSON"""
     if not os.path.exists(HISTORY_FILE):
         return []
     try:
@@ -18,19 +17,16 @@ def load_history() -> list:
         return []
 
 def save_entry(entry: dict):
-    """Añade una entrada al historial"""
     history = load_history()
-    history.insert(0, entry)  # más reciente primero
+    history.insert(0, entry)
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 def clear_history():
-    """Borra todo el historial"""
     if os.path.exists(HISTORY_FILE):
         os.remove(HISTORY_FILE)
 
 def build_entry(result: dict) -> dict:
-    """Construye una entrada de historial a partir del resultado de una descarga"""
     return {
         'title': result['title'],
         'format': result['format'].upper(),

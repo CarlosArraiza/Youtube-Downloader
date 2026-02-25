@@ -4,12 +4,11 @@ import time
 import sys
 
 def get_ffmpeg_path():
-    """Devuelve la ruta de ffmpeg, dentro del exe o en el sistema"""
     if getattr(sys, 'frozen', False):
-        # Estamos dentro de un exe generado por PyInstaller
+        # PyInstaller
         base_path = sys._MEIPASS
     else:
-        # Estamos en desarrollo normal
+        # desarrollo
         base_path = os.path.join(os.path.dirname(__file__), '..')
     
     ffmpeg = os.path.join(base_path, 'ffmpeg.exe')
@@ -18,7 +17,6 @@ def get_ffmpeg_path():
     return None
 
 def get_video_info(url: str) -> dict:
-    """Obtiene información del vídeo sin descargarlo"""
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
@@ -50,11 +48,8 @@ def get_video_info(url: str) -> dict:
             'formats': formats
         }
 
-def download_video(url: str, quality: str, output_format: str, output_path: str, progress_callback=None) -> dict:
-    """
-    Descarga el vídeo en la calidad y formato seleccionados.
-    Devuelve un dict con info de la descarga o None si falla.
-    """
+def download_video(url: str, quality: str, output_format: str, output_path: str,
+                   progress_callback=None, cancel_check=None) -> dict:
     start_time = time.time()
 
     if output_format == "mp3":
@@ -89,6 +84,8 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
     downloaded_file = []
 
     def progress_hook(d):
+        if cancel_check and cancel_check():
+            raise Exception("Descarga cancelada por el usuario")
         if d['status'] == 'downloading' and progress_callback:
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
             downloaded = d.get('downloaded_bytes', 0)

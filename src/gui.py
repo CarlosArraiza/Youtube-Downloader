@@ -21,9 +21,14 @@ class App(ctk.CTk):
 
         self.output_path = os.path.join(os.path.expanduser("~"), "Downloads")
         self.video_info = None
+        self._cancel_download = False
 
         self._build_ui()
 
+    def _on_cancel(self):
+        self._cancel_download = True
+        self.label_status.configure(text="Cancelando...")
+        
     def _build_ui(self):
         self.label_title = ctk.CTkLabel(self, text="YouTube Downloader", font=ctk.CTkFont(size=20, weight="bold"))
         self.label_title.pack(pady=(20, 10))
@@ -227,13 +232,17 @@ class App(ctk.CTk):
         output_format = self.combo_format.get()
         output_path = self.entry_folder.get().strip()
 
-        self.btn_download.configure(state="disabled", text="Descargando...")
+        self._cancel_download = False
+        self.btn_download.configure(text="Cancelar", fg_color="red",
+                                 hover_color="#aa0000", command=self._on_cancel)
         self.progress_bar.set(0)
         self.label_progress.configure(text="0%")
         self.label_speed.configure(text="")
         self.label_status.configure(text="Iniciando descarga...")
 
         def progress_callback(percentage, speed):
+            if self._cancel_download:
+                return
             self.after(0, lambda: self.progress_bar.set(percentage / 100))
             self.after(0, lambda: self.label_progress.configure(text=f"{int(percentage)}%"))
             if speed and speed > 0:
@@ -247,23 +256,31 @@ class App(ctk.CTk):
                 self.after(0, lambda: self.label_speed.configure(text=""))
 
         def download_thread():
-            result = download_video(url, quality, output_format, output_path, progress_callback)
-            if result:
+            result = download_video(url, quality, output_format, output_path,
+                                    progress_callback, lambda: self._cancel_download)
+            if self._cancel_download:
+                self.after(0, lambda: self.label_status.configure(text="✗ Descarga cancelada"))
+                self.after(0, lambda: self.progress_bar.set(0))
+                self.after(0, lambda: self.label_progress.configure(text="0%"))
+            elif result:
                 save_entry(build_entry(result))
                 self.after(0, self._refresh_history)
                 self.after(0, lambda: self.label_status.configure(text="✓ Descarga completada"))
                 self.after(0, lambda: self._reset_form())
                 msg = (f"Descarga completada.\n\n"
-                       f"Formato: {result['format'].upper()}\n"
-                       f"Calidad: {result['quality']}\n"
-                       f"Peso: {result['size_mb']} MB\n"
-                       f"Tiempo: {result['elapsed_seconds']}s\n"
-                       f"Carpeta: {result['output_path']}")
+                    f"Formato: {result['format'].upper()}\n"
+                    f"Calidad: {result['quality']}\n"
+                    f"Peso: {result['size_mb']} MB\n"
+                    f"Tiempo: {result['elapsed_seconds']}s\n"
+                    f"Carpeta: {result['output_path']}")
                 self.after(0, lambda: messagebox.showinfo("Completado", msg))
             else:
                 self.after(0, lambda: self.label_status.configure(text="✗ Error en la descarga"))
                 self.after(0, lambda: messagebox.showerror("Error", "No se pudo descargar el vídeo."))
-            self.after(0, lambda: self.btn_download.configure(state="normal", text="Descargar"))
+
+            self.after(0, lambda: self.btn_download.configure(
+                text="Descargar", fg_color=["#3B8ED0", "#1F6AA5"],
+                hover_color=["#36719F", "#144870"], command=self._on_download))
 
         threading.Thread(target=download_thread, daemon=True).start()
 
