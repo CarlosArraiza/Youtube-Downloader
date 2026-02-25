@@ -1,45 +1,62 @@
+import yt_dlp
 import os
-from pytubefix import YouTube
 
-def descargar_video(url, solo_audio=False):
-    try:
-        # Crea una instancia de YouTube con la URL proporcionada
-        video = YouTube(url)
+def get_video_info(url: str) -> dict:
+    """Obtiene información del vídeo sin descargarlo"""
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
         
-        if solo_audio:
-            # Selecciona el stream de solo audio
-            stream = video.streams.filter(only_audio=True).first()
-            print(f"Descargando solo el audio de: {video.title}")
-        else:
-            # Selecciona el stream de video con la mayor resolución
-            stream = video.streams.get_highest_resolution()
-            print(f"Descargando video completo de: {video.title}")
-            print(f"Resolución: {stream.resolution}")
+        # Extraer calidades disponibles
+        formats = []
+        seen = set()
+        for f in info.get('formats', []):
+            height = f.get('height')
+            if height and f.get('vcodec') != 'none':
+                label = f"{height}p"
+                if label not in seen:
+                    seen.add(label)
+                    formats.append(label)
         
-        # Obtiene la ruta de descargas del usuario
-        download_path = os.path.join(os.path.expanduser("~"), "Descargas")  # En español
-        if not os.path.isdir(download_path):  # Si "Descargas" no existe, prueba con "Downloads"
-            download_path = os.path.join(os.path.expanduser("~"), "Downloads")
+        formats.sort(key=lambda x: int(x[:-1]), reverse=True)
         
-        # Descarga el archivo
-        stream.download(output_path=download_path)
-        
-        if solo_audio:
-            # Cambia la extensión a .mp3 para el archivo de solo audio
-            original_file = os.path.join(download_path, stream.default_filename)
-            base, ext = os.path.splitext(original_file)
-            new_file = f"{base}.mp3"
-            os.rename(original_file, new_file)
-            print(f"¡Descarga de audio completada en {new_file}!")
-        else:
-            print(f"¡Descarga de video completada en {download_path}!")
+        return {
+            'title': info.get('title', 'Sin título'),
+            'duration': info.get('duration', 0),
+            'thumbnail': info.get('thumbnail', ''),
+            'formats': formats
+        }
+
+def download_video(url: str, quality: str, output_path: str, progress_callback=None) -> bool:
+    """Descarga el vídeo en la calidad seleccionada"""
+    height = quality.replace('p', '')
     
+    def progress_hook(d):
+        if d['status'] == 'downloading' and progress_callback:
+            total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+            downloaded = d.get('downloaded_bytes', 0)
+            if total > 0:
+                percentage = (downloaded / total) * 100
+                progress_callback(percentage)
+        elif d['status'] == 'finished' and progress_callback:
+            progress_callback(100)
+
+    ydl_opts = {
+        'format': f'bestvideo[height<={height}]+bestaudio/best[height<={height}]',
+        'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
+        'merge_output_format': 'mp4',
+        'progress_hooks': [progress_hook],
+        'quiet': True,
+        'no_warnings': True,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        return True
     except Exception as e:
-        print("Ocurrió un error:", e)
-
-# Solicita el enlace del video al usuario
-url = input("Ingresa la URL del video de YouTube que deseas descargar: ")
-opcion = input("¿Quieres descargar solo el audio? (s/n): ").strip().lower()
-
-# Llama a la función con la opción elegida
-descargar_video(url, solo_audio=(opcion == 's'))
+        print(f"Error al descargar: {e}")
+        return False
