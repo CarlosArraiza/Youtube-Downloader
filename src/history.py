@@ -2,7 +2,10 @@ import json
 import os
 from datetime import datetime
 
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), '..', 'history.json')
+APP_NAME = "YouTubeDownloader"
+DATA_DIR = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser("~")), APP_NAME)
+os.makedirs(DATA_DIR, exist_ok=True)
+HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
 
 def load_history() -> list:
     """Carga el historial desde el archivo JSON"""

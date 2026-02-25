@@ -1,4 +1,6 @@
 myenv/
+venv/
 __pycache__/
 build/
 *.spec
+history.json

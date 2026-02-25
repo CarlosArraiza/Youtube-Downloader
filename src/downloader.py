@@ -7,10 +7,14 @@ def get_video_info(url: str) -> dict:
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
+        'noplaylist': True,  # ignora la playlist, coge solo el vídeo
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        
+
+        if info.get('_type') == 'playlist':
+            raise ValueError("Las URLs de playlist no están soportadas. Pega la URL de un vídeo individual.")
+
         formats = []
         seen = set()
         for f in info.get('formats', []):
@@ -20,9 +24,9 @@ def get_video_info(url: str) -> dict:
                 if label not in seen:
                     seen.add(label)
                     formats.append(label)
-        
+
         formats.sort(key=lambda x: int(x[:-1]), reverse=True)
-        
+
         return {
             'title': info.get('title', 'Sin título'),
             'duration': info.get('duration', 0),
