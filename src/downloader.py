@@ -7,8 +7,9 @@ def get_video_info(url: str) -> dict:
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
-        'noplaylist': True,  # ignora la playlist, coge solo el vídeo
+        'noplaylist': True,
     }
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
@@ -44,6 +45,7 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
     if output_format == "mp3":
         ydl_opts = {
             'format': 'bestaudio/best',
+            'noplaylist': True,
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -56,27 +58,28 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
     else:
         height = quality.replace('p', '')
         ydl_opts = {
-            'format': f'bestvideo[height<={height}]+bestaudio/best[height<={height}]',
+            'format': f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={height}]+bestaudio/best',
+            'noplaylist': True,
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
             'merge_output_format': 'mp4',
             'quiet': True,
             'no_warnings': True,
         }
 
-    # Guardamos el nombre del archivo descargado
     downloaded_file = []
 
     def progress_hook(d):
         if d['status'] == 'downloading' and progress_callback:
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
             downloaded = d.get('downloaded_bytes', 0)
+            speed = d.get('speed', 0) or 0
             if total > 0:
                 percentage = (downloaded / total) * 100
-                progress_callback(percentage)
+                progress_callback(percentage, speed)
         elif d['status'] == 'finished':
             downloaded_file.append(d.get('filename', ''))
             if progress_callback:
-                progress_callback(100)
+                progress_callback(100, 0)
 
     ydl_opts['progress_hooks'] = [progress_hook]
 
@@ -87,7 +90,6 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
 
         elapsed_time = round(time.time() - start_time, 1)
 
-        # Calcular peso del archivo descargado
         file_size = None
         if output_format == "mp3":
             if downloaded_file:
@@ -95,7 +97,6 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
                 if os.path.exists(filepath):
                     file_size = round(os.path.getsize(filepath) / (1024 * 1024), 2)
         else:
-            # Para MP4 buscamos el archivo más reciente en la carpeta destino
             try:
                 files = [
                     os.path.join(output_path, f)
@@ -107,6 +108,7 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
                     file_size = round(os.path.getsize(latest) / (1024 * 1024), 2)
             except Exception:
                 pass
+
         return {
             'title': title,
             'format': output_format,
@@ -117,5 +119,9 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
         }
 
     except Exception as e:
-        print(f"Error al descargar: {e}")
+        error_msg = str(e)
+        if "Sign in" in error_msg or "bot" in error_msg:
+            print("Error: Este vídeo requiere estar logueado en YouTube.")
+        else:
+            print(f"Error al descargar: {e}")
         return None

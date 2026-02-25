@@ -16,7 +16,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("YouTube Downloader")
-        self.geometry("600x600")
+        self.geometry("600x620")
         self.resizable(False, False)
 
         self.output_path = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -25,11 +25,9 @@ class App(ctk.CTk):
         self._build_ui()
 
     def _build_ui(self):
-        # Título
         self.label_title = ctk.CTkLabel(self, text="YouTube Downloader", font=ctk.CTkFont(size=20, weight="bold"))
         self.label_title.pack(pady=(20, 10))
 
-        # Pestañas
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
 
@@ -66,7 +64,6 @@ class App(ctk.CTk):
         self.frame_options = ctk.CTkFrame(tab)
         self.frame_options.pack(padx=10, pady=10, fill="x")
 
-        # Selector formato
         self.label_format = ctk.CTkLabel(self.frame_options, text="Formato:")
         self.label_format.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
@@ -75,14 +72,12 @@ class App(ctk.CTk):
         self.combo_format.set("mp4")
         self.combo_format.grid(row=0, column=1, padx=10, pady=10, sticky="w")
 
-        # Selector calidad
         self.label_quality = ctk.CTkLabel(self.frame_options, text="Calidad:")
         self.label_quality.grid(row=1, column=0, padx=10, pady=10, sticky="w")
 
         self.combo_quality = ctk.CTkComboBox(self.frame_options, values=["Busca un vídeo primero"], width=150)
         self.combo_quality.grid(row=1, column=1, padx=10, pady=10, sticky="w")
 
-        # Selector carpeta
         self.label_folder = ctk.CTkLabel(self.frame_options, text="Carpeta:")
         self.label_folder.grid(row=2, column=0, padx=10, pady=10, sticky="w")
 
@@ -98,8 +93,18 @@ class App(ctk.CTk):
         self.progress_bar.pack(padx=10, pady=(10, 2))
         self.progress_bar.set(0)
 
-        self.label_progress = ctk.CTkLabel(tab, text="0%")
-        self.label_progress.pack()
+        # Frame estado y velocidad
+        self.frame_status = ctk.CTkFrame(tab, fg_color="transparent")
+        self.frame_status.pack(fill="x", padx=10)
+
+        self.label_progress = ctk.CTkLabel(self.frame_status, text="0%")
+        self.label_progress.pack(side="left", padx=10)
+
+        self.label_speed = ctk.CTkLabel(self.frame_status, text="", text_color="gray")
+        self.label_speed.pack(side="right", padx=10)
+
+        self.label_status = ctk.CTkLabel(tab, text="", text_color="gray")
+        self.label_status.pack()
 
         # Botón descargar
         self.btn_download = ctk.CTkButton(tab, text="Descargar", width=200, height=40,
@@ -110,20 +115,17 @@ class App(ctk.CTk):
     def _build_history_tab(self):
         tab = self.tabview.tab("Historial")
 
-        # Botón limpiar historial
         self.btn_clear = ctk.CTkButton(tab, text="Limpiar historial", width=160,
                                         fg_color="red", hover_color="#aa0000",
                                         command=self._on_clear_history)
         self.btn_clear.pack(padx=10, pady=(10, 5), anchor="e")
 
-        # Frame scrollable para las entradas
         self.history_frame = ctk.CTkScrollableFrame(tab)
         self.history_frame.pack(padx=10, pady=5, fill="both", expand=True)
 
         self._refresh_history()
 
     def _refresh_history(self):
-        # Limpiar frame
         for widget in self.history_frame.winfo_children():
             widget.destroy()
 
@@ -177,6 +179,7 @@ class App(ctk.CTk):
             return
 
         self.btn_search.configure(state="disabled", text="Buscando...")
+        self.label_status.configure(text="Obteniendo información del vídeo...")
         self.label_title_video.configure(text="Título: -")
         self.label_duration.configure(text="Duración: -")
 
@@ -191,8 +194,10 @@ class App(ctk.CTk):
                 duration_str = f"{minutes}:{secs:02d}"
 
                 self.after(0, lambda: self._update_info(info['title'], duration_str, info['formats']))
+                self.after(0, lambda: self.label_status.configure(text=""))
             except Exception as e:
                 self.after(0, lambda: messagebox.showerror("Error", f"No se pudo obtener información del vídeo.\n{e}"))
+                self.after(0, lambda: self.label_status.configure(text=""))
             finally:
                 self.after(0, lambda: self.btn_search.configure(state="normal", text="Buscar"))
 
@@ -225,16 +230,29 @@ class App(ctk.CTk):
         self.btn_download.configure(state="disabled", text="Descargando...")
         self.progress_bar.set(0)
         self.label_progress.configure(text="0%")
+        self.label_speed.configure(text="")
+        self.label_status.configure(text="Iniciando descarga...")
 
-        def progress_callback(percentage):
+        def progress_callback(percentage, speed):
             self.after(0, lambda: self.progress_bar.set(percentage / 100))
             self.after(0, lambda: self.label_progress.configure(text=f"{int(percentage)}%"))
+            if speed and speed > 0:
+                if speed >= 1024 * 1024:
+                    speed_str = f"{speed / (1024 * 1024):.1f} MB/s"
+                else:
+                    speed_str = f"{speed / 1024:.0f} KB/s"
+                self.after(0, lambda: self.label_speed.configure(text=speed_str))
+            if percentage == 100:
+                self.after(0, lambda: self.label_status.configure(text="Procesando archivo..."))
+                self.after(0, lambda: self.label_speed.configure(text=""))
 
         def download_thread():
             result = download_video(url, quality, output_format, output_path, progress_callback)
             if result:
                 save_entry(build_entry(result))
                 self.after(0, self._refresh_history)
+                self.after(0, lambda: self.label_status.configure(text="✓ Descarga completada"))
+                self.after(0, lambda: self._reset_form())
                 msg = (f"Descarga completada.\n\n"
                        f"Formato: {result['format'].upper()}\n"
                        f"Calidad: {result['quality']}\n"
@@ -243,10 +261,21 @@ class App(ctk.CTk):
                        f"Carpeta: {result['output_path']}")
                 self.after(0, lambda: messagebox.showinfo("Completado", msg))
             else:
+                self.after(0, lambda: self.label_status.configure(text="✗ Error en la descarga"))
                 self.after(0, lambda: messagebox.showerror("Error", "No se pudo descargar el vídeo."))
             self.after(0, lambda: self.btn_download.configure(state="normal", text="Descargar"))
 
         threading.Thread(target=download_thread, daemon=True).start()
+
+    def _reset_form(self):
+        self.entry_url.delete(0, "end")
+        self.video_info = None
+        self.label_title_video.configure(text="Título: -")
+        self.label_duration.configure(text="Duración: -")
+        self.combo_quality.configure(values=["Busca un vídeo primero"])
+        self.combo_quality.set("Busca un vídeo primero")
+        self.progress_bar.set(0)
+        self.label_progress.configure(text="0%")
 
 def main():
     app = App()
