@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from downloader import get_video_info, download_video
+from history import load_history, save_entry, clear_history, build_entry
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -15,7 +16,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("YouTube Downloader")
-        self.geometry("600x550")
+        self.geometry("600x600")
         self.resizable(False, False)
 
         self.output_path = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -28,19 +29,32 @@ class App(ctk.CTk):
         self.label_title = ctk.CTkLabel(self, text="YouTube Downloader", font=ctk.CTkFont(size=20, weight="bold"))
         self.label_title.pack(pady=(20, 10))
 
-        # Frame URL
-        self.frame_url = ctk.CTkFrame(self)
-        self.frame_url.pack(padx=20, pady=10, fill="x")
+        # Pestañas
+        self.tabview = ctk.CTkTabview(self)
+        self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
 
-        self.entry_url = ctk.CTkEntry(self.frame_url, placeholder_text="Pega aquí la URL de YouTube...", width=420)
+        self.tabview.add("Descargar")
+        self.tabview.add("Historial")
+
+        self._build_download_tab()
+        self._build_history_tab()
+
+    def _build_download_tab(self):
+        tab = self.tabview.tab("Descargar")
+
+        # Frame URL
+        self.frame_url = ctk.CTkFrame(tab)
+        self.frame_url.pack(padx=10, pady=10, fill="x")
+
+        self.entry_url = ctk.CTkEntry(self.frame_url, placeholder_text="Pega aquí la URL de YouTube...", width=380)
         self.entry_url.pack(side="left", padx=(10, 5), pady=10)
 
         self.btn_search = ctk.CTkButton(self.frame_url, text="Buscar", width=80, command=self._on_search)
         self.btn_search.pack(side="left", padx=(5, 10), pady=10)
 
         # Frame info vídeo
-        self.frame_info = ctk.CTkFrame(self)
-        self.frame_info.pack(padx=20, pady=10, fill="x")
+        self.frame_info = ctk.CTkFrame(tab)
+        self.frame_info.pack(padx=10, pady=10, fill="x")
 
         self.label_title_video = ctk.CTkLabel(self.frame_info, text="Título: -", anchor="w")
         self.label_title_video.pack(padx=10, pady=(10, 2), fill="x")
@@ -49,8 +63,8 @@ class App(ctk.CTk):
         self.label_duration.pack(padx=10, pady=(2, 10), fill="x")
 
         # Frame opciones
-        self.frame_options = ctk.CTkFrame(self)
-        self.frame_options.pack(padx=20, pady=10, fill="x")
+        self.frame_options = ctk.CTkFrame(tab)
+        self.frame_options.pack(padx=10, pady=10, fill="x")
 
         # Selector formato
         self.label_format = ctk.CTkLabel(self.frame_options, text="Formato:")
@@ -72,7 +86,7 @@ class App(ctk.CTk):
         self.label_folder = ctk.CTkLabel(self.frame_options, text="Carpeta:")
         self.label_folder.grid(row=2, column=0, padx=10, pady=10, sticky="w")
 
-        self.entry_folder = ctk.CTkEntry(self.frame_options, width=350)
+        self.entry_folder = ctk.CTkEntry(self.frame_options, width=320)
         self.entry_folder.insert(0, self.output_path)
         self.entry_folder.grid(row=2, column=1, padx=10, pady=10, sticky="w")
 
@@ -80,18 +94,68 @@ class App(ctk.CTk):
         self.btn_folder.grid(row=2, column=2, padx=10, pady=10)
 
         # Barra de progreso
-        self.progress_bar = ctk.CTkProgressBar(self, width=560)
-        self.progress_bar.pack(padx=20, pady=(10, 2))
+        self.progress_bar = ctk.CTkProgressBar(tab, width=540)
+        self.progress_bar.pack(padx=10, pady=(10, 2))
         self.progress_bar.set(0)
 
-        self.label_progress = ctk.CTkLabel(self, text="0%")
+        self.label_progress = ctk.CTkLabel(tab, text="0%")
         self.label_progress.pack()
 
         # Botón descargar
-        self.btn_download = ctk.CTkButton(self, text="Descargar", width=200, height=40,
+        self.btn_download = ctk.CTkButton(tab, text="Descargar", width=200, height=40,
                                            font=ctk.CTkFont(size=14, weight="bold"),
                                            command=self._on_download)
-        self.btn_download.pack(pady=20)
+        self.btn_download.pack(pady=15)
+
+    def _build_history_tab(self):
+        tab = self.tabview.tab("Historial")
+
+        # Botón limpiar historial
+        self.btn_clear = ctk.CTkButton(tab, text="Limpiar historial", width=160,
+                                        fg_color="red", hover_color="#aa0000",
+                                        command=self._on_clear_history)
+        self.btn_clear.pack(padx=10, pady=(10, 5), anchor="e")
+
+        # Frame scrollable para las entradas
+        self.history_frame = ctk.CTkScrollableFrame(tab)
+        self.history_frame.pack(padx=10, pady=5, fill="both", expand=True)
+
+        self._refresh_history()
+
+    def _refresh_history(self):
+        # Limpiar frame
+        for widget in self.history_frame.winfo_children():
+            widget.destroy()
+
+        history = load_history()
+
+        if not history:
+            ctk.CTkLabel(self.history_frame, text="No hay descargas registradas.", anchor="w").pack(padx=10, pady=20)
+            return
+
+        for entry in history:
+            frame = ctk.CTkFrame(self.history_frame)
+            frame.pack(padx=5, pady=5, fill="x")
+
+            title = entry.get('title', '-')
+            fmt = entry.get('format', '-')
+            quality = entry.get('quality', '-')
+            size = entry.get('size_mb', '-')
+            elapsed = entry.get('elapsed_seconds', '-')
+            date = entry.get('date', '-')
+            path = entry.get('output_path', '-')
+
+            ctk.CTkLabel(frame, text=f"🎬 {title}", anchor="w",
+                         font=ctk.CTkFont(weight="bold"), wraplength=500).pack(padx=10, pady=(8, 2), fill="x")
+            ctk.CTkLabel(frame, text=f"📅 {date}   •   {fmt}   •   {quality}   •   {size} MB   •   {elapsed}s",
+                         anchor="w", text_color="gray").pack(padx=10, pady=(2, 2), fill="x")
+            ctk.CTkLabel(frame, text=f"📁 {path}", anchor="w",
+                         text_color="gray", wraplength=500).pack(padx=10, pady=(2, 8), fill="x")
+
+    def _on_clear_history(self):
+        if messagebox.askyesno("Confirmar", "¿Seguro que quieres borrar todo el historial?"):
+            clear_history()
+            self._refresh_history()
 
     def _on_format_change(self, value):
         if value == "mp3":
@@ -169,7 +233,9 @@ class App(ctk.CTk):
         def download_thread():
             result = download_video(url, quality, output_format, output_path, progress_callback)
             if result:
-                msg = (f"Vídeo descargado correctamente.\n\n"
+                save_entry(build_entry(result))
+                self.after(0, self._refresh_history)
+                msg = (f"Descarga completada.\n\n"
                        f"Formato: {result['format'].upper()}\n"
                        f"Calidad: {result['quality']}\n"
                        f"Peso: {result['size_mb']} MB\n"

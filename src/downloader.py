@@ -85,14 +85,24 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
 
         # Calcular peso del archivo descargado
         file_size = None
-        if downloaded_file:
-            # Para mp3 el archivo final tiene extensión diferente
-            filepath = downloaded_file[0]
-            if output_format == "mp3":
-                filepath = os.path.splitext(filepath)[0] + ".mp3"
-            if os.path.exists(filepath):
-                file_size = round(os.path.getsize(filepath) / (1024 * 1024), 2)
-
+        if output_format == "mp3":
+            if downloaded_file:
+                filepath = os.path.splitext(downloaded_file[0])[0] + ".mp3"
+                if os.path.exists(filepath):
+                    file_size = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+        else:
+            # Para MP4 buscamos el archivo más reciente en la carpeta destino
+            try:
+                files = [
+                    os.path.join(output_path, f)
+                    for f in os.listdir(output_path)
+                    if f.endswith('.mp4')
+                ]
+                if files:
+                    latest = max(files, key=os.path.getmtime)
+                    file_size = round(os.path.getsize(latest) / (1024 * 1024), 2)
+            except Exception:
+                pass
         return {
             'title': title,
             'format': output_format,
