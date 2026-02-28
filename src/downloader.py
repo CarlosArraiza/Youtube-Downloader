@@ -17,7 +17,7 @@ def get_ffmpeg_path():
         base_path = sys._MEIPASS
     else:
         base_path = os.path.join(os.path.dirname(__file__), '..')
-    
+
     ffmpeg = os.path.join(base_path, 'ffmpeg.exe')
     if os.path.exists(ffmpeg):
         return base_path
@@ -48,7 +48,8 @@ def get_video_info(url: str) -> dict:
             'title': info.get('title', 'Sin título'),
             'duration': info.get('duration', 0),
             'thumbnail': info.get('thumbnail', ''),
-            'formats': formats
+            'uploader': info.get('uploader') or info.get('channel', 'Desconocido'),
+            'formats': formats,
         }
 
 
@@ -83,7 +84,6 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
         }
         if ffmpeg_location:
             ydl_opts['ffmpeg_location'] = ffmpeg_location
-
     else:
         height = quality.replace('p', '')
         format_map = {
@@ -106,6 +106,7 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             ydl_opts['ffmpeg_location'] = ffmpeg_location
 
     downloaded_file = []
+    thumbnail_url = [None]
 
     def progress_hook(d):
         if cancel_check and cancel_check():
@@ -128,6 +129,7 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             title = info.get('title', 'Sin título')
+            thumbnail_url[0] = info.get('thumbnail', '')
 
         elapsed_time = round(time.time() - start_time, 1)
         file_path = None
@@ -160,7 +162,8 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             'size_mb': file_size,
             'elapsed_seconds': elapsed_time,
             'output_path': output_path,
-            'file_path': file_path,  # ruta completa del archivo descargado
+            'file_path': file_path,
+            'thumbnail_url': thumbnail_url[0],
         }
 
     except Exception as e:

@@ -38,6 +38,7 @@ def build_entry(result: dict) -> dict:
         'size_mb': result['size_mb'],
         'elapsed_seconds': result['elapsed_seconds'],
         'output_path': result['output_path'],
-        'file_path': result.get('file_path'),  # ruta completa del archivo
+        'file_path': result.get('file_path'),
+        'thumbnail_url': result.get('thumbnail_url'),
         'date': datetime.now().strftime('%d/%m/%Y %H:%M')
     }
