@@ -3,39 +3,46 @@ from tkinter import filedialog, messagebox
 import threading
 import os
 import sys
-
 sys.path.insert(0, os.path.dirname(__file__))
-from downloader import get_video_info, download_video
-from history import load_history, save_entry, clear_history, build_entry
+from downloader import get_video_info, download_video, AUDIO_FORMATS, VIDEO_FORMATS, AUDIO_QUALITIES
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+# Todos los formatos disponibles agrupados para el combo
+ALL_FORMATS = ["── Vídeo ──", "mp4", "mkv", "avi", "webm", "mov",
+               "── Audio ──", "mp3", "aac", "flac", "ogg", "wav", "m4a"]
+
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-
         self.title("YouTube Downloader")
         self.geometry("600x620")
         self.resizable(False, False)
-
         self.output_path = os.path.join(os.path.expanduser("~"), "Downloads")
         self.video_info = None
         self._cancel_download = False
+
+        # Icono de la ventana
+        icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icon.ico')
+        if getattr(sys, 'frozen', False):
+            icon_path = os.path.join(sys._MEIPASS, 'assets', 'icon.ico')
+        if os.path.exists(icon_path):
+            self.iconbitmap(icon_path)
 
         self._build_ui()
 
     def _on_cancel(self):
         self._cancel_download = True
         self.label_status.configure(text="Cancelando...")
-        
+
     def _build_ui(self):
         self.label_title = ctk.CTkLabel(self, text="YouTube Downloader", font=ctk.CTkFont(size=20, weight="bold"))
         self.label_title.pack(pady=(20, 10))
 
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
-
         self.tabview.add("Descargar")
         self.tabview.add("Historial")
 
@@ -48,20 +55,16 @@ class App(ctk.CTk):
         # Frame URL
         self.frame_url = ctk.CTkFrame(tab)
         self.frame_url.pack(padx=10, pady=10, fill="x")
-
         self.entry_url = ctk.CTkEntry(self.frame_url, placeholder_text="Pega aquí la URL de YouTube...", width=380)
         self.entry_url.pack(side="left", padx=(10, 5), pady=10)
-
         self.btn_search = ctk.CTkButton(self.frame_url, text="Buscar", width=80, command=self._on_search)
         self.btn_search.pack(side="left", padx=(5, 10), pady=10)
 
         # Frame info vídeo
         self.frame_info = ctk.CTkFrame(tab)
         self.frame_info.pack(padx=10, pady=10, fill="x")
-
         self.label_title_video = ctk.CTkLabel(self.frame_info, text="Título: -", anchor="w")
         self.label_title_video.pack(padx=10, pady=(10, 2), fill="x")
-
         self.label_duration = ctk.CTkLabel(self.frame_info, text="Duración: -", anchor="w")
         self.label_duration.pack(padx=10, pady=(2, 10), fill="x")
 
@@ -71,25 +74,25 @@ class App(ctk.CTk):
 
         self.label_format = ctk.CTkLabel(self.frame_options, text="Formato:")
         self.label_format.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-
-        self.combo_format = ctk.CTkComboBox(self.frame_options, values=["mp4", "mp3"], width=100,
-                                             command=self._on_format_change)
+        self.combo_format = ctk.CTkComboBox(
+            self.frame_options,
+            values=ALL_FORMATS,
+            width=120,
+            command=self._on_format_change
+        )
         self.combo_format.set("mp4")
         self.combo_format.grid(row=0, column=1, padx=10, pady=10, sticky="w")
 
         self.label_quality = ctk.CTkLabel(self.frame_options, text="Calidad:")
         self.label_quality.grid(row=1, column=0, padx=10, pady=10, sticky="w")
-
         self.combo_quality = ctk.CTkComboBox(self.frame_options, values=["Busca un vídeo primero"], width=150)
         self.combo_quality.grid(row=1, column=1, padx=10, pady=10, sticky="w")
 
         self.label_folder = ctk.CTkLabel(self.frame_options, text="Carpeta:")
         self.label_folder.grid(row=2, column=0, padx=10, pady=10, sticky="w")
-
         self.entry_folder = ctk.CTkEntry(self.frame_options, width=320)
         self.entry_folder.insert(0, self.output_path)
         self.entry_folder.grid(row=2, column=1, padx=10, pady=10, sticky="w")
-
         self.btn_folder = ctk.CTkButton(self.frame_options, text="...", width=40, command=self._on_select_folder)
         self.btn_folder.grid(row=2, column=2, padx=10, pady=10)
 
@@ -101,10 +104,8 @@ class App(ctk.CTk):
         # Frame estado y velocidad
         self.frame_status = ctk.CTkFrame(tab, fg_color="transparent")
         self.frame_status.pack(fill="x", padx=10)
-
         self.label_progress = ctk.CTkLabel(self.frame_status, text="0%")
         self.label_progress.pack(side="left", padx=10)
-
         self.label_speed = ctk.CTkLabel(self.frame_status, text="", text_color="gray")
         self.label_speed.pack(side="right", padx=10)
 
@@ -113,37 +114,32 @@ class App(ctk.CTk):
 
         # Botón descargar
         self.btn_download = ctk.CTkButton(tab, text="Descargar", width=200, height=40,
-                                           font=ctk.CTkFont(size=14, weight="bold"),
-                                           command=self._on_download)
+                                          font=ctk.CTkFont(size=14, weight="bold"),
+                                          command=self._on_download)
         self.btn_download.pack(pady=15)
 
     def _build_history_tab(self):
         tab = self.tabview.tab("Historial")
-
         self.btn_clear = ctk.CTkButton(tab, text="Limpiar historial", width=160,
-                                        fg_color="red", hover_color="#aa0000",
-                                        command=self._on_clear_history)
+                                       fg_color="red", hover_color="#aa0000",
+                                       command=self._on_clear_history)
         self.btn_clear.pack(padx=10, pady=(10, 5), anchor="e")
 
         self.history_frame = ctk.CTkScrollableFrame(tab)
         self.history_frame.pack(padx=10, pady=5, fill="both", expand=True)
-
         self._refresh_history()
 
     def _refresh_history(self):
         for widget in self.history_frame.winfo_children():
             widget.destroy()
-
+        from history import load_history
         history = load_history()
-
         if not history:
             ctk.CTkLabel(self.history_frame, text="No hay descargas registradas.", anchor="w").pack(padx=10, pady=20)
             return
-
         for entry in history:
             frame = ctk.CTkFrame(self.history_frame)
             frame.pack(padx=5, pady=5, fill="x")
-
             title = entry.get('title', '-')
             fmt = entry.get('format', '-')
             quality = entry.get('quality', '-')
@@ -151,28 +147,37 @@ class App(ctk.CTk):
             elapsed = entry.get('elapsed_seconds', '-')
             date = entry.get('date', '-')
             path = entry.get('output_path', '-')
-
             ctk.CTkLabel(frame, text=f"🎬 {title}", anchor="w",
                          font=ctk.CTkFont(weight="bold"), wraplength=500).pack(padx=10, pady=(8, 2), fill="x")
-            ctk.CTkLabel(frame, text=f"📅 {date}   •   {fmt}   •   {quality}   •   {size} MB   •   {elapsed}s",
+            ctk.CTkLabel(frame, text=f"📅 {date}   •   {fmt.upper()}   •   {quality}   •   {size} MB   •   {elapsed}s",
                          anchor="w", text_color="gray").pack(padx=10, pady=(2, 2), fill="x")
             ctk.CTkLabel(frame, text=f"📁 {path}", anchor="w",
                          text_color="gray", wraplength=500).pack(padx=10, pady=(2, 8), fill="x")
 
     def _on_clear_history(self):
+        from history import clear_history
         if messagebox.askyesno("Confirmar", "¿Seguro que quieres borrar todo el historial?"):
             clear_history()
             self._refresh_history()
 
+    def _is_audio_format(self, fmt):
+        return fmt.lower() in AUDIO_FORMATS
+
     def _on_format_change(self, value):
-        if value == "mp3":
-            self.combo_quality.configure(state="normal", values=["128kbps", "192kbps", "320kbps"])
-            self.combo_quality.set("192kbps")
+        # Ignorar separadores
+        if value.startswith("──"):
+            self.combo_format.set("mp4")
+            value = "mp4"
+
+        if self._is_audio_format(value):
+            self.combo_quality.configure(state="normal", values=AUDIO_QUALITIES)
+            self.combo_quality.set(AUDIO_QUALITIES[0])  # 320kbps por defecto
         else:
             self.combo_quality.configure(state="normal")
-            if self.video_info:
-                self.combo_quality.configure(values=self.video_info['formats'])
-                self.combo_quality.set(self.video_info['formats'][0])
+            if self.video_info and self.video_info.get('formats'):
+                formats = self.video_info['formats']
+                self.combo_quality.configure(values=formats)
+                self.combo_quality.set(formats[0])  # Mayor calidad por defecto
             else:
                 self.combo_quality.configure(values=["Busca un vídeo primero"])
                 self.combo_quality.set("Busca un vídeo primero")
@@ -182,7 +187,6 @@ class App(ctk.CTk):
         if not url:
             messagebox.showwarning("Aviso", "Por favor introduce una URL.")
             return
-
         self.btn_search.configure(state="disabled", text="Buscando...")
         self.label_status.configure(text="Obteniendo información del vídeo...")
         self.label_title_video.configure(text="Título: -")
@@ -192,12 +196,10 @@ class App(ctk.CTk):
             try:
                 info = get_video_info(url)
                 self.video_info = info
-
                 seconds = info['duration']
                 minutes = seconds // 60
                 secs = seconds % 60
                 duration_str = f"{minutes}:{secs:02d}"
-
                 self.after(0, lambda: self._update_info(info['title'], duration_str, info['formats']))
                 self.after(0, lambda: self.label_status.configure(text=""))
             except Exception as e:
@@ -211,9 +213,10 @@ class App(ctk.CTk):
     def _update_info(self, title, duration, formats):
         self.label_title_video.configure(text=f"Título: {title}")
         self.label_duration.configure(text=f"Duración: {duration}")
-        if self.combo_format.get() == "mp4":
+        current_fmt = self.combo_format.get()
+        if not self._is_audio_format(current_fmt):
             self.combo_quality.configure(state="normal", values=formats)
-            self.combo_quality.set(formats[0] if formats else "-")
+            self.combo_quality.set(formats[0] if formats else "-")  # Mejor calidad por defecto
 
     def _on_select_folder(self):
         folder = filedialog.askdirectory(initialdir=self.output_path)
@@ -226,15 +229,19 @@ class App(ctk.CTk):
         if not self.video_info:
             messagebox.showwarning("Aviso", "Primero busca un vídeo.")
             return
-
         url = self.entry_url.get().strip()
         quality = self.combo_quality.get()
         output_format = self.combo_format.get()
         output_path = self.entry_folder.get().strip()
 
+        # Validar que no se haya seleccionado un separador
+        if output_format.startswith("──"):
+            messagebox.showwarning("Aviso", "Selecciona un formato válido.")
+            return
+
         self._cancel_download = False
         self.btn_download.configure(text="Cancelar", fg_color="red",
-                                 hover_color="#aa0000", command=self._on_cancel)
+                                    hover_color="#aa0000", command=self._on_cancel)
         self.progress_bar.set(0)
         self.label_progress.configure(text="0%")
         self.label_speed.configure(text="")
@@ -256,6 +263,7 @@ class App(ctk.CTk):
                 self.after(0, lambda: self.label_speed.configure(text=""))
 
         def download_thread():
+            from history import save_entry, build_entry
             result = download_video(url, quality, output_format, output_path,
                                     progress_callback, lambda: self._cancel_download)
             if self._cancel_download:
@@ -268,16 +276,15 @@ class App(ctk.CTk):
                 self.after(0, lambda: self.label_status.configure(text="✓ Descarga completada"))
                 self.after(0, lambda: self._reset_form())
                 msg = (f"Descarga completada.\n\n"
-                    f"Formato: {result['format'].upper()}\n"
-                    f"Calidad: {result['quality']}\n"
-                    f"Peso: {result['size_mb']} MB\n"
-                    f"Tiempo: {result['elapsed_seconds']}s\n"
-                    f"Carpeta: {result['output_path']}")
+                       f"Formato: {result['format'].upper()}\n"
+                       f"Calidad: {result['quality']}\n"
+                       f"Peso: {result['size_mb']} MB\n"
+                       f"Tiempo: {result['elapsed_seconds']}s\n"
+                       f"Carpeta: {result['output_path']}")
                 self.after(0, lambda: messagebox.showinfo("Completado", msg))
             else:
                 self.after(0, lambda: self.label_status.configure(text="✗ Error en la descarga"))
                 self.after(0, lambda: messagebox.showerror("Error", "No se pudo descargar el vídeo."))
-
             self.after(0, lambda: self.btn_download.configure(
                 text="Descargar", fg_color=["#3B8ED0", "#1F6AA5"],
                 hover_color=["#36719F", "#144870"], command=self._on_download))
@@ -294,9 +301,11 @@ class App(ctk.CTk):
         self.progress_bar.set(0)
         self.label_progress.configure(text="0%")
 
+
 def main():
     app = App()
     app.mainloop()
+
 
 if __name__ == "__main__":
     main()
