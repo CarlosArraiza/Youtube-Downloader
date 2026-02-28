@@ -3,12 +3,19 @@ import os
 import time
 import sys
 
+# Formatos de audio soportados
+AUDIO_FORMATS = ["mp3", "aac", "flac", "ogg", "wav", "m4a"]
+
+# Formatos de vídeo soportados
+VIDEO_FORMATS = ["mp4", "mkv", "avi", "webm", "mov"]
+
+# Calidades de audio disponibles
+AUDIO_QUALITIES = ["320kbps", "192kbps", "128kbps"]
+
 def get_ffmpeg_path():
     if getattr(sys, 'frozen', False):
-        # PyInstaller
         base_path = sys._MEIPASS
     else:
-        # desarrollo
         base_path = os.path.join(os.path.dirname(__file__), '..')
     
     ffmpeg = os.path.join(base_path, 'ffmpeg.exe')
@@ -16,19 +23,17 @@ def get_ffmpeg_path():
         return base_path
     return None
 
+
 def get_video_info(url: str) -> dict:
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
     }
-
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-
         if info.get('_type') == 'playlist':
             raise ValueError("Las URLs de playlist no están soportadas. Pega la URL de un vídeo individual.")
-
         formats = []
         seen = set()
         for f in info.get('formats', []):
@@ -38,9 +43,7 @@ def get_video_info(url: str) -> dict:
                 if label not in seen:
                     seen.add(label)
                     formats.append(label)
-
         formats.sort(key=lambda x: int(x[:-1]), reverse=True)
-
         return {
             'title': info.get('title', 'Sin título'),
             'duration': info.get('duration', 0),
@@ -48,39 +51,60 @@ def get_video_info(url: str) -> dict:
             'formats': formats
         }
 
+
 def download_video(url: str, quality: str, output_format: str, output_path: str,
                    progress_callback=None, cancel_check=None) -> dict:
     start_time = time.time()
+    output_format = output_format.lower()
 
-    if output_format == "mp3":
+    ffmpeg_location = get_ffmpeg_path()
+
+    if output_format in AUDIO_FORMATS:
+        codec_map = {
+            'mp3':  ('mp3',    quality.replace('kbps', '')),
+            'aac':  ('aac',    quality.replace('kbps', '')),
+            'flac': ('flac',   '0'),
+            'ogg':  ('vorbis', quality.replace('kbps', '')),
+            'wav':  ('wav',    '0'),
+            'm4a':  ('m4a',    quality.replace('kbps', '')),
+        }
+        codec, q = codec_map[output_format]
         ydl_opts = {
             'format': 'bestaudio/best',
             'noplaylist': True,
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': quality.replace('kbps', ''),
+                'preferredcodec': codec,
+                'preferredquality': q,
             }],
             'quiet': True,
             'no_warnings': True,
         }
-        ffmpeg_location = get_ffmpeg_path()
         if ffmpeg_location:
             ydl_opts['ffmpeg_location'] = ffmpeg_location
+
     else:
         height = quality.replace('p', '')
+        format_map = {
+            'mp4':  (f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={height}]+bestaudio/best', 'mp4'),
+            'mkv':  (f'bestvideo[height<={height}]+bestaudio/best', 'mkv'),
+            'avi':  (f'bestvideo[height<={height}]+bestaudio/best', 'avi'),
+            'webm': (f'bestvideo[height<={height}][ext=webm]+bestaudio[ext=webm]/bestvideo[height<={height}]+bestaudio/best', 'webm'),
+            'mov':  (f'bestvideo[height<={height}]+bestaudio/best', 'mov'),
+        }
+        fmt_selector, merge_fmt = format_map.get(output_format, (f'bestvideo[height<={height}]+bestaudio/best', output_format))
         ydl_opts = {
-            'format': f'bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<={height}]+bestaudio/best',
+            'format': fmt_selector,
             'noplaylist': True,
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
-            'merge_output_format': 'mp4',
+            'merge_output_format': merge_fmt,
             'quiet': True,
             'no_warnings': True,
         }
-        ffmpeg_location = get_ffmpeg_path()
         if ffmpeg_location:
             ydl_opts['ffmpeg_location'] = ffmpeg_location
+
     downloaded_file = []
 
     def progress_hook(d):
@@ -106,22 +130,25 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             title = info.get('title', 'Sin título')
 
         elapsed_time = round(time.time() - start_time, 1)
-
+        file_path = None
         file_size = None
-        if output_format == "mp3":
+
+        if output_format in AUDIO_FORMATS:
             if downloaded_file:
-                filepath = os.path.splitext(downloaded_file[0])[0] + ".mp3"
-                if os.path.exists(filepath):
-                    file_size = round(os.path.getsize(filepath) / (1024 * 1024), 2)
+                candidate = os.path.splitext(downloaded_file[0])[0] + f".{output_format}"
+                if os.path.exists(candidate):
+                    file_path = candidate
+                    file_size = round(os.path.getsize(candidate) / (1024 * 1024), 2)
         else:
             try:
                 files = [
                     os.path.join(output_path, f)
                     for f in os.listdir(output_path)
-                    if f.endswith('.mp4')
+                    if f.endswith(f'.{output_format}')
                 ]
                 if files:
                     latest = max(files, key=os.path.getmtime)
+                    file_path = latest
                     file_size = round(os.path.getsize(latest) / (1024 * 1024), 2)
             except Exception:
                 pass
@@ -133,12 +160,15 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             'size_mb': file_size,
             'elapsed_seconds': elapsed_time,
             'output_path': output_path,
+            'file_path': file_path,  # ruta completa del archivo descargado
         }
 
     except Exception as e:
         error_msg = str(e)
         if "Sign in" in error_msg or "bot" in error_msg:
             print("Error: Este vídeo requiere estar logueado en YouTube.")
+        elif "cancelada" in error_msg:
+            raise
         else:
             print(f"Error al descargar: {e}")
         return None

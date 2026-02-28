@@ -3,15 +3,40 @@ from tkinter import filedialog, messagebox
 import threading
 import os
 import sys
+import subprocess
 sys.path.insert(0, os.path.dirname(__file__))
 from downloader import get_video_info, download_video, AUDIO_FORMATS, VIDEO_FORMATS, AUDIO_QUALITIES
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-# Todos los formatos disponibles agrupados para el combo
 ALL_FORMATS = ["── Vídeo ──", "mp4", "mkv", "avi", "webm", "mov",
                "── Audio ──", "mp3", "aac", "flac", "ogg", "wav", "m4a"]
+
+
+def open_file_location(file_path: str, fallback_folder: str):
+    """Abre el explorador de archivos seleccionando el archivo concreto.
+    Si el archivo no existe, abre la carpeta como fallback."""
+    try:
+        if file_path and os.path.exists(file_path):
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(file_path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", file_path])
+            else:
+                # Linux: abre la carpeta (no todos los gestores soportan selección)
+                subprocess.Popen(["xdg-open", os.path.dirname(file_path)])
+        elif fallback_folder and os.path.exists(fallback_folder):
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", os.path.normpath(fallback_folder)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", fallback_folder])
+            else:
+                subprocess.Popen(["xdg-open", fallback_folder])
+        else:
+            messagebox.showwarning("Aviso", "No se encontró el archivo ni la carpeta de destino.")
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudo abrir la ubicación.\n{e}")
 
 
 class App(ctk.CTk):
@@ -24,7 +49,6 @@ class App(ctk.CTk):
         self.video_info = None
         self._cancel_download = False
 
-        # Icono de la ventana
         icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icon.ico')
         if getattr(sys, 'frozen', False):
             icon_path = os.path.join(sys._MEIPASS, 'assets', 'icon.ico')
@@ -52,7 +76,6 @@ class App(ctk.CTk):
     def _build_download_tab(self):
         tab = self.tabview.tab("Descargar")
 
-        # Frame URL
         self.frame_url = ctk.CTkFrame(tab)
         self.frame_url.pack(padx=10, pady=10, fill="x")
         self.entry_url = ctk.CTkEntry(self.frame_url, placeholder_text="Pega aquí la URL de YouTube...", width=380)
@@ -60,7 +83,6 @@ class App(ctk.CTk):
         self.btn_search = ctk.CTkButton(self.frame_url, text="Buscar", width=80, command=self._on_search)
         self.btn_search.pack(side="left", padx=(5, 10), pady=10)
 
-        # Frame info vídeo
         self.frame_info = ctk.CTkFrame(tab)
         self.frame_info.pack(padx=10, pady=10, fill="x")
         self.label_title_video = ctk.CTkLabel(self.frame_info, text="Título: -", anchor="w")
@@ -68,18 +90,13 @@ class App(ctk.CTk):
         self.label_duration = ctk.CTkLabel(self.frame_info, text="Duración: -", anchor="w")
         self.label_duration.pack(padx=10, pady=(2, 10), fill="x")
 
-        # Frame opciones
         self.frame_options = ctk.CTkFrame(tab)
         self.frame_options.pack(padx=10, pady=10, fill="x")
 
         self.label_format = ctk.CTkLabel(self.frame_options, text="Formato:")
         self.label_format.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.combo_format = ctk.CTkComboBox(
-            self.frame_options,
-            values=ALL_FORMATS,
-            width=120,
-            command=self._on_format_change
-        )
+        self.combo_format = ctk.CTkComboBox(self.frame_options, values=ALL_FORMATS, width=120,
+                                            command=self._on_format_change)
         self.combo_format.set("mp4")
         self.combo_format.grid(row=0, column=1, padx=10, pady=10, sticky="w")
 
@@ -96,12 +113,10 @@ class App(ctk.CTk):
         self.btn_folder = ctk.CTkButton(self.frame_options, text="...", width=40, command=self._on_select_folder)
         self.btn_folder.grid(row=2, column=2, padx=10, pady=10)
 
-        # Barra de progreso
         self.progress_bar = ctk.CTkProgressBar(tab, width=540)
         self.progress_bar.pack(padx=10, pady=(10, 2))
         self.progress_bar.set(0)
 
-        # Frame estado y velocidad
         self.frame_status = ctk.CTkFrame(tab, fg_color="transparent")
         self.frame_status.pack(fill="x", padx=10)
         self.label_progress = ctk.CTkLabel(self.frame_status, text="0%")
@@ -112,7 +127,6 @@ class App(ctk.CTk):
         self.label_status = ctk.CTkLabel(tab, text="", text_color="gray")
         self.label_status.pack()
 
-        # Botón descargar
         self.btn_download = ctk.CTkButton(tab, text="Descargar", width=200, height=40,
                                           font=ctk.CTkFont(size=14, weight="bold"),
                                           command=self._on_download)
@@ -138,21 +152,50 @@ class App(ctk.CTk):
             ctk.CTkLabel(self.history_frame, text="No hay descargas registradas.", anchor="w").pack(padx=10, pady=20)
             return
         for entry in history:
-            frame = ctk.CTkFrame(self.history_frame)
-            frame.pack(padx=5, pady=5, fill="x")
-            title = entry.get('title', '-')
-            fmt = entry.get('format', '-')
-            quality = entry.get('quality', '-')
-            size = entry.get('size_mb', '-')
-            elapsed = entry.get('elapsed_seconds', '-')
-            date = entry.get('date', '-')
-            path = entry.get('output_path', '-')
-            ctk.CTkLabel(frame, text=f"🎬 {title}", anchor="w",
-                         font=ctk.CTkFont(weight="bold"), wraplength=500).pack(padx=10, pady=(8, 2), fill="x")
-            ctk.CTkLabel(frame, text=f"📅 {date}   •   {fmt.upper()}   •   {quality}   •   {size} MB   •   {elapsed}s",
-                         anchor="w", text_color="gray").pack(padx=10, pady=(2, 2), fill="x")
-            ctk.CTkLabel(frame, text=f"📁 {path}", anchor="w",
-                         text_color="gray", wraplength=500).pack(padx=10, pady=(2, 8), fill="x")
+            self._build_history_card(entry)
+
+    def _build_history_card(self, entry: dict):
+        frame = ctk.CTkFrame(self.history_frame)
+        frame.pack(padx=5, pady=5, fill="x")
+
+        title   = entry.get('title', '-')
+        fmt     = entry.get('format', '-')
+        quality = entry.get('quality', '-')
+        size    = entry.get('size_mb', '-')
+        elapsed = entry.get('elapsed_seconds', '-')
+        date    = entry.get('date', '-')
+        path    = entry.get('output_path', '-')
+        file_path = entry.get('file_path')
+
+        # Fila superior: título + botón abrir
+        row_top = ctk.CTkFrame(frame, fg_color="transparent")
+        row_top.pack(padx=10, pady=(8, 2), fill="x")
+
+        ctk.CTkLabel(row_top, text=f"🎬 {title}",
+                     font=ctk.CTkFont(weight="bold"), anchor="w",
+                     wraplength=420).pack(side="left", fill="x", expand=True)
+
+        btn_open = ctk.CTkButton(
+            row_top,
+            text="📂 Abrir",
+            width=80,
+            height=26,
+            fg_color="transparent",
+            border_width=1,
+            text_color=("gray60", "gray80"),
+            hover_color=("gray85", "gray25"),
+            command=lambda fp=file_path, p=path: open_file_location(fp, p)
+        )
+        btn_open.pack(side="right")
+
+        # Fila detalles
+        ctk.CTkLabel(frame,
+                     text=f"📅 {date}   •   {fmt}   •   {quality}   •   {size} MB   •   {elapsed}s",
+                     anchor="w", text_color="gray").pack(padx=10, pady=(2, 2), fill="x")
+
+        # Fila carpeta
+        ctk.CTkLabel(frame, text=f"📁 {path}", anchor="w",
+                     text_color="gray", wraplength=500).pack(padx=10, pady=(2, 8), fill="x")
 
     def _on_clear_history(self):
         from history import clear_history
@@ -164,11 +207,9 @@ class App(ctk.CTk):
         return fmt.lower() in AUDIO_FORMATS
 
     def _on_format_change(self, value):
-        # Ignorar separadores
         if value.startswith("──"):
             self.combo_format.set("mp4")
             value = "mp4"
-
         if self._is_audio_format(value):
             self.combo_quality.configure(state="normal", values=AUDIO_QUALITIES)
             self.combo_quality.set(AUDIO_QUALITIES[0])  # 320kbps por defecto
@@ -177,7 +218,7 @@ class App(ctk.CTk):
             if self.video_info and self.video_info.get('formats'):
                 formats = self.video_info['formats']
                 self.combo_quality.configure(values=formats)
-                self.combo_quality.set(formats[0])  # Mayor calidad por defecto
+                self.combo_quality.set(formats[0])
             else:
                 self.combo_quality.configure(values=["Busca un vídeo primero"])
                 self.combo_quality.set("Busca un vídeo primero")
@@ -216,7 +257,7 @@ class App(ctk.CTk):
         current_fmt = self.combo_format.get()
         if not self._is_audio_format(current_fmt):
             self.combo_quality.configure(state="normal", values=formats)
-            self.combo_quality.set(formats[0] if formats else "-")  # Mejor calidad por defecto
+            self.combo_quality.set(formats[0] if formats else "-")
 
     def _on_select_folder(self):
         folder = filedialog.askdirectory(initialdir=self.output_path)
@@ -234,7 +275,6 @@ class App(ctk.CTk):
         output_format = self.combo_format.get()
         output_path = self.entry_folder.get().strip()
 
-        # Validar que no se haya seleccionado un separador
         if output_format.startswith("──"):
             messagebox.showwarning("Aviso", "Selecciona un formato válido.")
             return

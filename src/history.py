@@ -7,6 +7,7 @@ DATA_DIR = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser("~")),
 os.makedirs(DATA_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
 
+
 def load_history() -> list:
     if not os.path.exists(HISTORY_FILE):
         return []
@@ -16,15 +17,18 @@ def load_history() -> list:
     except Exception:
         return []
 
+
 def save_entry(entry: dict):
     history = load_history()
     history.insert(0, entry)
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
+
 def clear_history():
     if os.path.exists(HISTORY_FILE):
         os.remove(HISTORY_FILE)
+
 
 def build_entry(result: dict) -> dict:
     return {
@@ -34,5 +38,6 @@ def build_entry(result: dict) -> dict:
         'size_mb': result['size_mb'],
         'elapsed_seconds': result['elapsed_seconds'],
         'output_path': result['output_path'],
+        'file_path': result.get('file_path'),  # ruta completa del archivo
         'date': datetime.now().strftime('%d/%m/%Y %H:%M')
     }
