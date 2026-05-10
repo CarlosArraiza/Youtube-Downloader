@@ -445,16 +445,34 @@ class App(ctk.CTk):
     # ------------------------------------------------------------------ #
 
     def _load_thumbnail_async(self, url: str):
+        generation = getattr(self, '_thumb_generation', 0)
         def _fetch():
             img = load_image_from_url(url, THUMB_W, THUMB_H)
-            if img:
+            if img and getattr(self, '_thumb_generation', 0) == generation:
                 self._current_thumb = img
-                self.after(0, lambda: self.thumb_label.configure(image=img, text=""))
+                try:
+                    if self.thumb_label.winfo_exists():
+                        self.after(0, lambda i=img: self.thumb_label.configure(image=i, text=""))
+                except Exception:
+                    pass
         threading.Thread(target=_fetch, daemon=True).start()
 
     def _clear_thumbnail(self):
         self._current_thumb = None
-        self.thumb_label.configure(image=None, text="")
+        self._thumb_generation = getattr(self, '_thumb_generation', 0) + 1
+        try:
+            if self.thumb_label.winfo_exists():
+                # Crear un CTkImage transparente de 1x1 para limpiar sin warnings
+                from PIL import Image as PilImage
+                blank = ctk.CTkImage(
+                    light_image=PilImage.new("RGBA", (1, 1), (0, 0, 0, 0)),
+                    dark_image=PilImage.new("RGBA", (1, 1), (0, 0, 0, 0)),
+                    size=(1, 1)
+                )
+                self.thumb_label.configure(image=blank, text="",
+                                           width=THUMB_W, height=THUMB_H)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ #
     #  HISTORIAL
@@ -496,7 +514,11 @@ class App(ctk.CTk):
             def _fetch(url=thumb_url, lbl=thumb_lbl):
                 img = load_image_from_url(url, HIST_THUMB_W, HIST_THUMB_H)
                 if img:
-                    self.after(0, lambda: lbl.configure(image=img, text=""))
+                    try:
+                        if lbl.winfo_exists():
+                            self.after(0, lambda i=img, l=lbl: l.configure(image=i, text=""))
+                    except Exception:
+                        pass
             threading.Thread(target=_fetch, daemon=True).start()
 
         row_top = ctk.CTkFrame(frame, fg_color="transparent")
@@ -717,7 +739,6 @@ class App(ctk.CTk):
                 save_entry(build_entry(result))
                 self.after(0, self._refresh_history)
                 self.after(0, lambda: self.label_status.configure(text="✓ Descarga completada"))
-                self.after(0, self._reset_form)
                 if self.config_data.get('open_folder_after_download'):
                     self.after(500, lambda: open_folder(output_path))
                 msg = (f"Descarga completada.\n\n"
@@ -726,7 +747,10 @@ class App(ctk.CTk):
                        f"Peso: {result['size_mb']} MB\n"
                        f"Tiempo: {result['elapsed_seconds']}s\n"
                        f"Carpeta: {result['output_path']}")
-                self.after(0, lambda: messagebox.showinfo("Completado", msg))
+                def _show_and_reset():
+                    messagebox.showinfo("Completado", msg)
+                    self._reset_form()
+                self.after(0, _show_and_reset)
             else:
                 self.after(0, lambda: self.label_status.configure(text="✗ Error en la descarga"))
                 self.after(0, lambda: messagebox.showerror("Error", "No se pudo descargar el vídeo."))
