@@ -29,6 +29,7 @@ def get_video_info(url: str) -> dict:
         'quiet': True,
         'no_warnings': True,
         'noplaylist': True,
+        'js_runtimes': {'node': {}, 'deno': {}},
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -81,6 +82,7 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             }],
             'quiet': True,
             'no_warnings': True,
+            'js_runtimes': {'node': {}, 'deno': {}},
         }
         if ffmpeg_location:
             ydl_opts['ffmpeg_location'] = ffmpeg_location
@@ -101,6 +103,7 @@ def download_video(url: str, quality: str, output_format: str, output_path: str,
             'merge_output_format': merge_fmt,
             'quiet': True,
             'no_warnings': True,
+            'js_runtimes': {'node': {}, 'deno': {}},
         }
         if ffmpeg_location:
             ydl_opts['ffmpeg_location'] = ffmpeg_location
