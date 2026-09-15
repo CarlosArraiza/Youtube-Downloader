@@ -2,9 +2,9 @@
 ; Builds an installer from the PyInstaller onedir output (dist\YouTubeDownloader)
 
 #define MyAppName "YouTube Downloader"
-#define MyAppVersion "0.7.2"
+#define MyAppVersion "0.7.3"
 #define MyAppPublisher "CarlosArraiza"
-#define MyAppExeName "YouTubeDownloader-v0.7.2.exe"
+#define MyAppExeName "YouTubeDownloader-v0.7.3.exe"
 #define MySourceDir "dist\YouTubeDownloader"
 
 [Setup]
@@ -42,3 +42,95 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  DataCheckBox: TNewCheckBox;
+  DeleteUserData: Boolean;
+
+function GetAppDataDir(): String;
+begin
+  Result := ExpandConstant('{localappdata}\YouTubeDownloader');
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  Form: TSetupForm;
+  OKButton, CancelButton: TNewButton;
+  Lbl: TNewStaticText;
+begin
+  DeleteUserData := False;
+
+  if not DirExists(GetAppDataDir()) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  Form := TSetupForm.Create(nil);
+  try
+    Form.ClientWidth := ScaleX(440);
+    Form.ClientHeight := ScaleY(160);
+    Form.Caption := 'Desinstalar ' + '{#MyAppName}';
+    Form.Position := poScreenCenter;
+    Form.BorderStyle := bsDialog;
+
+    Lbl := TNewStaticText.Create(Form);
+    Lbl.Parent := Form;
+    Lbl.Left := ScaleX(16);
+    Lbl.Top := ScaleY(16);
+    Lbl.Width := Form.ClientWidth - ScaleX(32);
+    Lbl.AutoSize := False;
+    Lbl.WordWrap := True;
+    Lbl.Height := ScaleY(48);
+    Lbl.Caption := 'Se va a desinstalar ' + '{#MyAppName}' + '. Marca la siguiente casilla si tambien quieres eliminar tu configuracion e historial de descargas guardados.';
+
+    DataCheckBox := TNewCheckBox.Create(Form);
+    DataCheckBox.Parent := Form;
+    DataCheckBox.Left := ScaleX(16);
+    DataCheckBox.Top := Lbl.Top + Lbl.Height + ScaleY(12);
+    DataCheckBox.Width := Form.ClientWidth - ScaleX(32);
+    DataCheckBox.Height := ScaleY(34);
+    DataCheckBox.Caption := 'Eliminar tambien configuracion e historial (' + GetAppDataDir() + ')';
+    DataCheckBox.Checked := False;
+
+    OKButton := TNewButton.Create(Form);
+    OKButton.Parent := Form;
+    OKButton.Width := ScaleX(75);
+    OKButton.Height := ScaleY(23);
+    OKButton.Left := Form.ClientWidth - ScaleX(16) - OKButton.Width - ScaleX(8) - OKButton.Width;
+    OKButton.Top := Form.ClientHeight - ScaleY(16) - OKButton.Height;
+    OKButton.Caption := 'Continuar';
+    OKButton.ModalResult := mrOK;
+    OKButton.Default := True;
+
+    CancelButton := TNewButton.Create(Form);
+    CancelButton.Parent := Form;
+    CancelButton.Width := ScaleX(75);
+    CancelButton.Height := ScaleY(23);
+    CancelButton.Left := Form.ClientWidth - ScaleX(16) - CancelButton.Width;
+    CancelButton.Top := Form.ClientHeight - ScaleY(16) - CancelButton.Height;
+    CancelButton.Caption := 'Cancelar';
+    CancelButton.ModalResult := mrCancel;
+    CancelButton.Cancel := True;
+
+    if Form.ShowModal() = mrOK then
+    begin
+      DeleteUserData := DataCheckBox.Checked;
+      Result := True;
+    end
+    else
+      Result := False;
+  finally
+    Form.Free();
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    if DeleteUserData then
+      DelTree(GetAppDataDir(), True, True, True);
+  end;
+end;
