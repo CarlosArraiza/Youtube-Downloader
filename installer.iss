@@ -2,9 +2,9 @@
 ; Builds an installer from the PyInstaller onedir output (dist\YouTubeDownloader)
 
 #define MyAppName "YouTube Downloader"
-#define MyAppVersion "0.7.3"
+#define MyAppVersion "0.7.5"
 #define MyAppPublisher "CarlosArraiza"
-#define MyAppExeName "YouTubeDownloader-v0.7.3.exe"
+#define MyAppExeName "YouTubeDownloader-v0.7.5.exe"
 #define MySourceDir "dist\YouTubeDownloader"
 
 [Setup]
