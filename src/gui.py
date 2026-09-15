@@ -39,6 +39,8 @@ BTN_CLEAR_HOVER  = (CTK_BLUE_HOVER, YT_RED_HOVER)
 
 GRAY_TEXT = ("gray40", "gray65")
 
+HISTORY_PAGE_SIZE = 10
+
 # Fondo exacto de CTk en tema claro
 LIGHT_BG = "#EBEBEB"
 
@@ -150,7 +152,7 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=20, weight="bold"))
         self.label_main_title.pack(pady=(20, 10))
 
-        self.tabview = ctk.CTkTabview(self)
+        self.tabview = ctk.CTkTabview(self, command=self._on_tab_changed)
         self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
         self.tabview.add("Descargar")
         self.tabview.add("Historial")
@@ -166,6 +168,16 @@ class App(ctk.CTk):
             self.tabview.set(self._active_tab)
         except Exception:
             pass
+        self._on_tab_changed()
+
+    def _on_tab_changed(self):
+        try:
+            current = self.tabview.get()
+        except Exception:
+            return
+        if current == "Historial" and not self._history_loaded:
+            self._history_loaded = True
+            self._refresh_history()
 
     def _rebuild_ui(self):
         try:
@@ -313,9 +325,11 @@ class App(ctk.CTk):
             command=self._on_clear_history)
         self.btn_clear.pack(padx=10, pady=(10, 5), anchor="e")
 
+        self._history_loaded = False
+        self._history_shown_count = HISTORY_PAGE_SIZE
+
         self.history_frame = ctk.CTkScrollableFrame(tab)
         self.history_frame.pack(padx=10, pady=5, fill="both", expand=True)
-        self._refresh_history()
 
     # ------------------------------------------------------------------ #
     #  PESTAÑA CONFIGURACIÓN
@@ -487,8 +501,27 @@ class App(ctk.CTk):
             ctk.CTkLabel(self.history_frame, text="No hay descargas registradas.",
                          anchor="w").pack(padx=10, pady=20)
             return
-        for entry in history:
+        shown = history[:self._history_shown_count]
+        for entry in shown:
             self._build_history_card(entry)
+        if len(shown) < len(history):
+            remaining = len(history) - len(shown)
+            ctk.CTkButton(
+                self.history_frame,
+                text=f"Mostrar {min(remaining, HISTORY_PAGE_SIZE)} más ({len(shown)}/{len(history)})",
+                fg_color="transparent", border_width=1,
+                text_color=("gray40", "gray70"),
+                hover_color=("gray85", "gray25"),
+                command=self._on_show_more_history
+            ).pack(padx=10, pady=10)
+
+    def _on_show_more_history(self):
+        self._history_shown_count += HISTORY_PAGE_SIZE
+        self._refresh_history()
+
+    def _on_history_maybe_refresh(self):
+        if self._history_loaded:
+            self._refresh_history()
 
     def _build_history_card(self, entry: dict):
         frame = ctk.CTkFrame(self.history_frame)
@@ -551,6 +584,7 @@ class App(ctk.CTk):
         from history import clear_history
         if messagebox.askyesno("Confirmar", "¿Seguro que quieres borrar todo el historial?"):
             clear_history()
+            self._history_shown_count = HISTORY_PAGE_SIZE
             self._refresh_history()
 
     # ------------------------------------------------------------------ #
@@ -737,7 +771,7 @@ class App(ctk.CTk):
                 self.after(0, lambda: self.label_progress.configure(text="0%"))
             elif result:
                 save_entry(build_entry(result))
-                self.after(0, self._refresh_history)
+                self.after(0, self._on_history_maybe_refresh)
                 self.after(0, lambda: self.label_status.configure(text="✓ Descarga completada"))
                 if self.config_data.get('open_folder_after_download'):
                     self.after(500, lambda: open_folder(output_path))

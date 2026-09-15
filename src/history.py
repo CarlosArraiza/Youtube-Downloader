@@ -7,6 +7,8 @@ DATA_DIR = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser("~")),
 os.makedirs(DATA_DIR, exist_ok=True)
 HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
 
+MAX_HISTORY_ENTRIES = 50
+
 
 def load_history() -> list:
     if not os.path.exists(HISTORY_FILE):
@@ -21,6 +23,7 @@ def load_history() -> list:
 def save_entry(entry: dict):
     history = load_history()
     history.insert(0, entry)
+    history = history[:MAX_HISTORY_ENTRIES]
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
