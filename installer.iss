@@ -67,13 +67,9 @@ begin
     Exit;
   end;
 
-  Form := TSetupForm.Create(nil);
+  Form := CreateCustomForm(ScaleX(440), ScaleY(160), True, True);
   try
-    Form.ClientWidth := ScaleX(440);
-    Form.ClientHeight := ScaleY(160);
-    Form.Caption := 'Desinstalar ' + '{#MyAppName}';
-    Form.Position := poScreenCenter;
-    Form.BorderStyle := bsDialog;
+    Form.Caption := 'Desinstalar {#MyAppName}';
 
     Lbl := TNewStaticText.Create(Form);
     Lbl.Parent := Form;
@@ -83,7 +79,7 @@ begin
     Lbl.AutoSize := False;
     Lbl.WordWrap := True;
     Lbl.Height := ScaleY(48);
-    Lbl.Caption := 'Se va a desinstalar ' + '{#MyAppName}' + '. Marca la siguiente casilla si tambien quieres eliminar tu configuracion e historial de descargas guardados.';
+    Lbl.Caption := 'Se va a desinstalar {#MyAppName}. Marca la siguiente casilla si tambien quieres eliminar tu configuracion e historial de descargas guardados.';
 
     DataCheckBox := TNewCheckBox.Create(Form);
     DataCheckBox.Parent := Form;
@@ -113,6 +109,8 @@ begin
     CancelButton.Caption := 'Cancelar';
     CancelButton.ModalResult := mrCancel;
     CancelButton.Cancel := True;
+
+    Form.ActiveControl := OKButton;
 
     if Form.ShowModal() = mrOK then
     begin
