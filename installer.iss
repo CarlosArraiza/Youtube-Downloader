@@ -52,7 +52,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 ; Actualización lanzada desde la app (/SILENT /update=1): vuelve a abrirla sin permisos de administrador.
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: IsAppUpdate
+; Se abre a través del Explorador para que arranque con un entorno limpio: el instalador hereda
+; de la app vieja variables de PyInstaller que harían fallar a la nueva ("Failed to load Python DLL").
+Filename: "{win}\explorer.exe"; Parameters: """{app}\{#MyAppExeName}"""; Flags: nowait runasoriginaluser; Check: IsAppUpdate
 
 [Code]
 var

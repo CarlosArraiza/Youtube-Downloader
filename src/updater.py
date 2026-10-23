@@ -111,6 +111,12 @@ def launch_installer(path: str):
     local = os.path.normcase(os.environ.get("LOCALAPPDATA", ""))
     if local and os.path.normcase(sys.executable).startswith(local):
         args += " /CURRENTUSER"
+    # El ejecutable de PyInstaller deja en el entorno la ruta de su carpeta temporal (_MEI...).
+    # El instalador lo heredaría y la app nueva intentaría usar la carpeta de esta, que se borra
+    # al cerrarse ("Failed to load Python DLL"). Se limpia antes de lanzarlo.
+    for name in [n for n in os.environ if n.startswith("_PYI_") or n == "_MEIPASS2"]:
+        del os.environ[name]
+    os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     # os.startfile usa ShellExecute, que sí muestra el aviso de UAC; subprocess fallaría con el error 740.
     os.startfile(path, "open", args)
 
