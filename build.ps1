@@ -19,6 +19,28 @@ if (-not $iscc) { throw "No encuentro ISCC.exe (Inno Setup 6)" }
 & .\venv\Scripts\python.exe -m PyInstaller --noconfirm --clean YouTubeDownloader.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller ha fallado" }
 
+# Comprueba el paquete real antes de generar el instalador.
+$qtExe = Join-Path $PSScriptRoot 'dist\YouTubeDownloader\YouTubeDownloader.exe'
+$qtSmoke = Start-Process -FilePath $qtExe -ArgumentList '--smoke-test' -PassThru -WindowStyle Hidden
+if (-not $qtSmoke.WaitForExit(30000)) {
+    Stop-Process -Id $qtSmoke.Id
+    throw 'La comprobación de arranque no terminó.'
+}
+$qtSmoke.Refresh()
+if ($qtSmoke.ExitCode -ne 0) { throw "La app no arranca (código $($qtSmoke.ExitCode))." }
+
+# Aparta el antiguo paquete onefile: no debe confundirse con el paquete Qt actual.
+$qtOldExe = Join-Path $PSScriptRoot 'dist\YouTubeDownloader.exe'
+if (Test-Path -LiteralPath $qtOldExe) {
+    Move-Item -LiteralPath $qtOldExe -Destination (Join-Path $PSScriptRoot "build\obsolete-single-file-$([guid]::NewGuid()).exe.disabled")
+}
+$qtShell = New-Object -ComObject WScript.Shell
+$qtShortcut = $qtShell.CreateShortcut((Join-Path $PSScriptRoot 'dist\YouTubeDownloader.lnk'))
+$qtShortcut.TargetPath = $qtExe
+$qtShortcut.WorkingDirectory = Split-Path -Parent $qtExe
+$qtShortcut.Description = 'YouTube Downloader — Qt Quick'
+$qtShortcut.Save()
+
 & $iscc "/DMyAppVersion=$version" installer.iss
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup ha fallado" }
 

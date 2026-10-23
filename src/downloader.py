@@ -14,7 +14,7 @@ AUDIO_QUALITIES = ["320kbps", "192kbps", "128kbps"]
 
 def get_ffmpeg_path():
     if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
+        base_path = os.path.join(sys._MEIPASS, 'ffmpeg')
     else:
         base_path = os.path.join(os.path.dirname(__file__), '..')
 

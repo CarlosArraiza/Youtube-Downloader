@@ -1,6 +1,6 @@
 # YouTube Downloader 📹
 
-Herramienta de escritorio para descargar vídeos y audio de YouTube con interfaz gráfica moderna. Desarrollada con Python, CustomTkinter y yt-dlp.
+Herramienta de escritorio para descargar vídeos y audio de YouTube con interfaz gráfica moderna. Desarrollada con Python, PySide6 / Qt Quick y yt-dlp.
 
 ## Capturas de pantalla
 
@@ -21,7 +21,7 @@ Herramienta de escritorio para descargar vídeos y audio de YouTube con interfaz
 - **Miniatura del vídeo** mostrada al buscar (formato 16:9, sin franjas negras)
 - **Información del vídeo**: título, canal, duración y calidades disponibles
 - **Animación de búsqueda** mientras se obtiene la información del vídeo
-- **Colores YouTube**: botones rojos en tema claro, azules en tema oscuro
+- **Diseño Esencial**: ventana redimensionable, navegación superior y acento azul consistente en ambos temas
 
 ### Historial
 - **Historial de descargas** con título, canal, fecha, formato, calidad, tamaño y carpeta
@@ -36,7 +36,7 @@ Herramienta de escritorio para descargar vídeos y audio de YouTube con interfaz
 - **Formato por defecto**: selecciona el formato que se usará al abrir la app
 - **Calidad de vídeo por defecto**: desde 144p hasta 2160p, o mejor disponible
 - **Calidad de audio por defecto**: 128kbps, 192kbps o 320kbps
-- **Buscar actualizaciones al iniciar**: activado por defecto, avisa una sola vez por cada versión nueva
+- **Buscar actualizaciones al iniciar**: activado por defecto; las novedades se muestran en Acerca de
 - Configuración guardada en `%LOCALAPPDATA%\YouTubeDownloader\config.json`
 
 ### Acerca de y actualizaciones
@@ -48,14 +48,14 @@ Herramienta de escritorio para descargar vídeos y audio de YouTube con interfaz
 
 ### Opción 1 — Instalador (recomendado para Windows)
 
-Descarga `YouTubeDownloader-Setup-vX.Y.Z.exe` de la última [release](https://github.com/CarlosArraiza/Youtube-Downloader/releases) y ejecútalo. No requiere instalar Python ni dependencias. A partir de la 0.8.0 la app se actualiza sola desde **Acerca de**.
+Descarga `YouTubeDownloader-Setup-vX.Y.Z.exe` de la última [release](https://github.com/cali-sb/Youtube-Downloader/releases) y ejecútalo. No requiere instalar Python ni dependencias. A partir de la 0.8.0 la app se actualiza sola desde **Acerca de**.
 
 ### Opción 2 — Desde el código fuente
 
 #### 1. Clona el repositorio
 
 ```bash
-git clone https://github.com/CarlosArraiza/Youtube-Downloader.git
+git clone https://github.com/cali-sb/Youtube-Downloader.git
 cd Youtube-Downloader
 ```
 
@@ -92,8 +92,8 @@ python main.py
 La versión está solo en `src/version.py`; el `.spec` de PyInstaller y el instalador la toman de ahí.
 
 1. Cambia `__version__` en `src/version.py`.
-2. Ejecuta `.\build.ps1` (necesita PyInstaller en el `venv`, [Inno Setup 6](https://jrsoftware.org/isinfo.php) y ffmpeg en `C:\ffmpeg\bin`). Deja el instalador en `installer_output\`.
-3. Crea una release en GitHub con la etiqueta de la versión (p. ej. `0.8.1`) y adjunta `YouTubeDownloader-Setup-vX.Y.Z.exe`. El nombre del fichero tiene que contener `Setup` y acabar en `.exe` para que la app lo encuentre.
+2. Ejecuta las pruebas (`.\venv\Scripts\python.exe -m unittest discover -s tests -v`) y `.\build.ps1` (necesita PyInstaller en el `venv`, [Inno Setup 6](https://jrsoftware.org/isinfo.php) y ffmpeg en `C:\ffmpeg\bin`). Deja el instalador en `installer_output\`.
+3. Crea una release en GitHub con la etiqueta de la versión (p. ej. `1.0.0`) y adjunta `YouTubeDownloader-Setup-vX.Y.Z.exe`. El nombre del fichero tiene que contener `Setup` y acabar en `.exe` para que la app lo encuentre.
 
 ## Uso 🚀
 
@@ -106,8 +106,9 @@ La versión está solo en `src/version.py`; el `.spec` de PyInstaller y el insta
 
 ## Requisitos 🔧
 
-- Python 3.8 o superior
-- ffmpeg (incluido en el `.exe`; si ejecutas desde código debe estar en el PATH o en la raíz del proyecto)
+- Windows 10/11 de 64 bits para el instalador
+- Desde código: desarrollada y probada con Python 3.13, PySide6 6.12 y PyInstaller 6.19
+- ffmpeg (el instalador lo incluye en la carpeta de la app; si ejecutas desde código debe estar en el PATH o en la raíz del proyecto)
 - Conexión a Internet
 
 ## Dependencias principales
@@ -115,8 +116,8 @@ La versión está solo en `src/version.py`; el `.spec` de PyInstaller y el insta
 | Paquete | Uso |
 |---|---|
 | yt-dlp | Motor de descarga |
-| customtkinter | Interfaz gráfica |
-| Pillow | Procesamiento de miniaturas |
+| PySide6 (Qt Quick / QML) | Interfaz gráfica |
+| Pillow | Regenerar el icono (`create_icon.py`) |
 | requests | Descarga de miniaturas y de actualizaciones |
 | packaging | Comparación de versiones |
 | ffmpeg | Conversión y mezcla de formatos |
@@ -126,15 +127,19 @@ La versión está solo en `src/version.py`; el `.spec` de PyInstaller y el insta
 ```
 Youtube-Downloader/
 ├── src/
-│   ├── gui.py          # Interfaz gráfica
+│   ├── qt_gui.py       # Puente Python ↔ QML y arranque de la app
+│   ├── qml/Main.qml    # Interfaz (Qt Quick)
+│   ├── gui.py          # Entrada de compatibilidad (remite a qt_gui)
 │   ├── downloader.py   # Lógica de descarga
 │   ├── history.py      # Gestión del historial
 │   ├── config.py       # Gestión de configuración
 │   ├── updater.py      # Búsqueda e instalación de actualizaciones
 │   └── version.py      # Versión de la app (única fuente)
 ├── assets/
-│   ├── icon.ico        # Icono de la aplicación
-│   └── create_icon.py  # Script para regenerar el icono
+│   └── icon.ico        # Icono de la aplicación
+├── tests/              # Pruebas de la interfaz (unittest, sin conexión)
+├── create_icon.py      # Script para regenerar el icono
+├── YouTubeDownloader.spec  # Empaquetado PyInstaller (carpeta, no un solo .exe)
 ├── installer.iss       # Instalador de Inno Setup
 ├── build.ps1           # Compila la app y el instalador
 ├── main.py             # Punto de entrada

@@ -1,6 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import re
+import os
+from pathlib import Path
 
 block_cipher = None
 
@@ -27,54 +29,65 @@ with open('version.txt', 'w', encoding='utf-8') as f:
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
-    binaries=[
-        ('C:\\ffmpeg\\bin\\ffmpeg.exe', '.'),
-        ('C:\\ffmpeg\\bin\\ffprobe.exe', '.'),
-    ],
+    pathex=['src'],
+    binaries=[],
     datas=[
-        ('src', 'src'),
+        ('src/qml', 'src/qml'),
         ('assets', 'assets'),
     ],
     hiddenimports=[
-        'customtkinter',
+        'PySide6.QtQml',
+        'PySide6.QtQuick',
+        'PySide6.QtQuickControls2',
+        'PySide6.QtNetwork',
         'yt_dlp',
         'yt_dlp.extractor',
         'yt_dlp.postprocessor',
-        'darkdetect',
         'packaging',
         'mutagen',
         'brotli',
-        'pycryptodomex',
+        'Cryptodome',
         'websockets',
         'certifi',
         'requests',
         'urllib3',
         'PIL',
         'PIL.Image',
-        'PIL.ImageTk',
         'PIL.ImageFilter',
         'PIL.ImageOps',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['tkinter', 'customtkinter', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtWebEngineQuick'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
 
+# Qt on Windows uses the OS ICU API. PyInstaller can resolve the same DLL name
+# from unrelated tools on PATH (e.g. Poppler), which has incompatible exports.
+# Leave Windows to supply ICU; FFmpeg's own DLLs remain isolated below.
+a.binaries = [entry for entry in a.binaries
+              if Path(entry[0]).name.lower() not in ('icuuc.dll', 'icudt78.dll')]
+
+# FFmpeg is a separate process: keep its DLLs away from Qt's DLL search path.
+# Append after Analysis so its ICU DLL is not collected into the application root.
+ffmpeg_bin = Path('C:/ffmpeg/bin')
+for tool in ('ffmpeg.exe', 'ffprobe.exe'):
+    if not (ffmpeg_bin / tool).is_file():
+        raise FileNotFoundError(ffmpeg_bin / tool)
+for tool in [ffmpeg_bin / 'ffmpeg.exe', ffmpeg_bin / 'ffprobe.exe', *ffmpeg_bin.glob('*.dll')]:
+    a.datas.append(('ffmpeg/' + tool.name, str(tool), 'DATA'))
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='YouTubeDownloader',   # nombre fijo: el instalador actualiza en el sitio y no deja .exe viejos
     debug=False,
     bootloader_ignore_signals=False,
@@ -82,7 +95,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=os.environ.get('YTD_BUILD_CONSOLE') == '1',
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
