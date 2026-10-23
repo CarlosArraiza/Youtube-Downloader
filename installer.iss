@@ -1,10 +1,13 @@
 ; Inno Setup script for YouTube Downloader
 ; Builds an installer from the PyInstaller onedir output (dist\YouTubeDownloader)
 
+; La versión la pasa build.ps1 desde src\version.py: ISCC /DMyAppVersion=X.Y.Z installer.iss
+#ifndef MyAppVersion
+  #error Compila con build.ps1 (o pasa /DMyAppVersion=X.Y.Z a ISCC)
+#endif
 #define MyAppName "YouTube Downloader"
-#define MyAppVersion "0.7.5"
 #define MyAppPublisher "CarlosArraiza"
-#define MyAppExeName "YouTubeDownloader-v0.7.5.exe"
+#define MyAppExeName "YouTubeDownloader.exe"
 #define MySourceDir "dist\YouTubeDownloader"
 
 [Setup]
@@ -35,6 +38,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Hasta la 0.7.5 el .exe llevaba la versión en el nombre; al actualizar se borran los viejos.
+Type: files; Name: "{app}\YouTubeDownloader-v*.exe"
+; Las librerías de la versión anterior se sustituyen enteras para no dejar restos.
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
@@ -42,11 +51,18 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+; Actualización lanzada desde la app (/SILENT /update=1): vuelve a abrirla sin permisos de administrador.
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: IsAppUpdate
 
 [Code]
 var
   DataCheckBox: TNewCheckBox;
   DeleteUserData: Boolean;
+
+function IsAppUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:update|0}') = '1';
+end;
 
 function GetAppDataDir(): String;
 begin

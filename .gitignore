@@ -5,7 +5,7 @@ build/
 dist/
 installer_output/
 *.spec
+!YouTubeDownloader.spec
 history.json
-YouTubeDownloader.spec
 version.txt
 todolist.txt

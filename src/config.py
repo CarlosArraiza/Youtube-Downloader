@@ -15,6 +15,8 @@ DEFAULTS = {
     'default_format': 'mp4',
     'default_quality_video': 'Mejor disponible',
     'default_quality_audio': '320kbps',
+    'check_updates_on_start': True,
+    'notified_version': '',   # última versión nueva avisada al arrancar, para no repetir el aviso
 }
 
 

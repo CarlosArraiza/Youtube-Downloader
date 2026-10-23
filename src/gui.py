@@ -4,6 +4,7 @@ import threading
 import os
 import sys
 import subprocess
+import webbrowser
 import requests
 from io import BytesIO
 from PIL import Image
@@ -11,6 +12,8 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(__file__))
 from downloader import get_video_info, download_video, AUDIO_FORMATS, VIDEO_FORMATS, AUDIO_QUALITIES
 from config import load_config, save_config, VIDEO_QUALITY_OPTIONS
+from version import __version__
+import updater
 
 THUMB_W, THUMB_H           = 160, 90
 HIST_THUMB_W, HIST_THUMB_H = 96, 54
@@ -130,6 +133,12 @@ class App(ctk.CTk):
         self._spinner_running = False
         self._current_thumb = None
         self._active_tab = "Descargar"
+        # Estado de la actualización; vive fuera de los widgets porque _rebuild_ui los recrea.
+        self._update = None
+        self._update_state = "idle"   # idle | checking | available | latest | downloading | error
+        self._update_message = ""
+        self._update_progress = 0.0
+        self._cancel_update = False
 
         icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icon.ico')
         if getattr(sys, 'frozen', False):
@@ -138,6 +147,10 @@ class App(ctk.CTk):
             self.iconbitmap(icon_path)
 
         self._build_ui()
+
+        updater.cleanup_downloads()
+        if self.config_data['check_updates_on_start'] and updater.is_installed_build():
+            self.after(3000, lambda: self._on_check_updates(silent=True))
 
     # ------------------------------------------------------------------ #
     #  UI BUILD / REBUILD
@@ -157,10 +170,12 @@ class App(ctk.CTk):
         self.tabview.add("Descargar")
         self.tabview.add("Historial")
         self.tabview.add("Configuración")
+        self.tabview.add("Acerca de")
 
         self._build_download_tab()
         self._build_history_tab()
         self._build_config_tab()
+        self._build_about_tab()
 
         self._apply_tab_colors()
 
@@ -427,11 +442,209 @@ class App(ctk.CTk):
             row=row, column=0, columnspan=2, padx=10, pady=8, sticky="ew")
         row += 1
 
+        ctk.CTkLabel(scroll, text="Actualizaciones",
+                     font=ctk.CTkFont(size=14, weight="bold"), anchor="w").grid(
+            row=row, column=0, columnspan=2, padx=10, pady=(4, 4), sticky="w")
+        row += 1
+
+        ctk.CTkLabel(scroll, text="Buscar actualizaciones al iniciar:",
+                     anchor="w").grid(row=row, column=0, padx=10, pady=8, sticky="w")
+        self.switch_check_updates = ctk.CTkSwitch(scroll, text="")
+        if self.config_data['check_updates_on_start']:
+            self.switch_check_updates.select()
+        self.switch_check_updates.grid(row=row, column=1, padx=10, pady=8, sticky="w")
+        row += 1
+
+        ctk.CTkFrame(scroll, height=1, fg_color=("gray70", "gray30")).grid(
+            row=row, column=0, columnspan=2, padx=10, pady=8, sticky="ew")
+        row += 1
+
         self.btn_save_config = ctk.CTkButton(
             scroll, text="Guardar configuración", width=220,
             fg_color=BTN_MAIN_FG, hover_color=BTN_MAIN_HOVER,
             command=self._on_save_config)
         self.btn_save_config.grid(row=row, column=0, columnspan=2, pady=16)
+
+    # ------------------------------------------------------------------ #
+    #  PESTAÑA ACERCA DE
+    # ------------------------------------------------------------------ #
+
+    def _build_about_tab(self):
+        tab = self.tabview.tab("Acerca de")
+
+        frame_app = ctk.CTkFrame(tab)
+        frame_app.pack(padx=10, pady=10, fill="x")
+        ctk.CTkLabel(frame_app, text="YouTube Downloader",
+                     font=ctk.CTkFont(size=18, weight="bold")).pack(padx=14, pady=(14, 0), anchor="w")
+        ctk.CTkLabel(frame_app, text=f"Versión {__version__}",
+                     text_color=GRAY_TEXT, font=ctk.CTkFont(size=12)).pack(padx=14, anchor="w")
+        ctk.CTkLabel(frame_app, text="Descarga vídeos y audio de YouTube con yt-dlp y FFmpeg.",
+                     anchor="w").pack(padx=14, pady=(8, 0), anchor="w")
+        link = ctk.CTkLabel(frame_app, text=updater.REPO_URL.replace("https://", ""),
+                            text_color=(YT_RED, CTK_BLUE), cursor="hand2",
+                            font=ctk.CTkFont(size=12, underline=True))
+        link.pack(padx=14, pady=(4, 14), anchor="w")
+        link.bind("<Button-1>", lambda _e: webbrowser.open(updater.REPO_URL))
+
+        frame_upd = ctk.CTkFrame(tab)
+        frame_upd.pack(padx=10, pady=(0, 10), fill="both", expand=True)
+        ctk.CTkLabel(frame_upd, text="Actualizaciones",
+                     font=ctk.CTkFont(size=14, weight="bold")).pack(padx=14, pady=(12, 4), anchor="w")
+
+        self.label_update_status = ctk.CTkLabel(
+            frame_upd, text="", anchor="w", justify="left", wraplength=580)
+        self.label_update_status.pack(padx=14, pady=(0, 6), anchor="w")
+
+        self.text_update_notes = ctk.CTkTextbox(frame_upd, height=200, wrap="word")
+
+        self.frame_update_progress = ctk.CTkFrame(frame_upd, fg_color="transparent")
+        self.progress_update = ctk.CTkProgressBar(self.frame_update_progress, width=500)
+        self.progress_update.pack(side="left", padx=(0, 10))
+        self.label_update_progress = ctk.CTkLabel(self.frame_update_progress, text="0%", width=40)
+        self.label_update_progress.pack(side="left")
+
+        frame_buttons = ctk.CTkFrame(frame_upd, fg_color="transparent")
+        frame_buttons.pack(side="bottom", pady=(6, 14))
+        self.btn_check_updates = ctk.CTkButton(
+            frame_buttons, text="Buscar actualizaciones", width=200,
+            fg_color=BTN_ACCENT_FG, hover_color=BTN_ACCENT_HOVER,
+            command=self._on_check_updates)
+        self.btn_check_updates.pack(side="left", padx=6)
+        self.btn_install_update = ctk.CTkButton(
+            frame_buttons, text="Descargar e instalar", width=200,
+            fg_color=BTN_MAIN_FG, hover_color=BTN_MAIN_HOVER,
+            command=self._on_install_update)
+
+        self._render_update_section()
+
+    def _render_update_section(self):
+        # Pinta la sección según self._update_state; se llama también tras _rebuild_ui.
+        if not getattr(self, "label_update_status", None) or not self.label_update_status.winfo_exists():
+            return
+        state = self._update_state
+        default = f"Tienes la versión {__version__}. Pulsa el botón para ver si hay alguna más nueva."
+        self.label_update_status.configure(text=self._update_message or default)
+
+        self.btn_check_updates.configure(
+            state="disabled" if state in ("checking", "downloading") else "normal",
+            text="Buscando..." if state == "checking" else "Buscar actualizaciones")
+
+        if state in ("available", "downloading") and self._update:
+            self.text_update_notes.configure(state="normal")
+            self.text_update_notes.delete("1.0", "end")
+            self.text_update_notes.insert("1.0", self._update["notes"] or "Esta versión no tiene notas.")
+            self.text_update_notes.configure(state="disabled")
+            self.text_update_notes.pack(padx=14, pady=(0, 8), fill="both", expand=True)
+            self.btn_install_update.pack(side="left", padx=6)
+            if state == "downloading":
+                self.btn_install_update.configure(
+                    text="Cancelar", fg_color=("gray60", "gray35"), hover_color=("gray50", "gray25"))
+            else:
+                self.btn_install_update.configure(
+                    text="Descargar e instalar", fg_color=BTN_MAIN_FG, hover_color=BTN_MAIN_HOVER)
+        else:
+            self.text_update_notes.pack_forget()
+            self.btn_install_update.pack_forget()
+
+        if state == "downloading":
+            self.frame_update_progress.pack(padx=14, pady=(0, 6))
+            self._on_update_progress(self._update_progress)
+        else:
+            self.frame_update_progress.pack_forget()
+
+    def _set_update_state(self, state, message=""):
+        self._update_state = state
+        self._update_message = message
+        self._render_update_section()
+
+    def _on_check_updates(self, silent=False):
+        if self._update_state in ("checking", "downloading"):
+            return
+        self._set_update_state("checking", "Buscando actualizaciones...")
+
+        def check_thread():
+            try:
+                update = updater.check_for_update()
+                self.after(0, lambda: self._on_update_checked(update, silent))
+            except Exception as e:
+                self.after(0, lambda err=e: self._set_update_state(
+                    "error", f"No se pudo comprobar si hay actualizaciones.\n{err}"))
+
+        threading.Thread(target=check_thread, daemon=True).start()
+
+    def _on_update_checked(self, update, silent):
+        self._update = update
+        if not update:
+            self._set_update_state("latest", f"Tienes la última versión ({__version__}).")
+            return
+        new = str(update["version"])
+        self._set_update_state("available", f"Hay una versión nueva: {new} (tienes la {__version__}).")
+
+        # Al arrancar, avisa una sola vez por versión; el resto de veces queda en «Acerca de».
+        if silent and self.config_data.get('notified_version') != new:
+            saved = load_config()
+            saved['notified_version'] = new
+            save_config(saved)
+            self.config_data['notified_version'] = new
+            if messagebox.askyesno("Actualización disponible",
+                                   f"Hay una versión nueva de YouTube Downloader ({new}).\n\n¿Quieres ver las novedades?"):
+                self.tabview.set("Acerca de")
+
+    def _on_install_update(self):
+        if self._update_state == "downloading":
+            self._cancel_update = True
+            return
+        update = self._update
+        if not update:
+            return
+        if not updater.is_installed_build():
+            messagebox.showinfo(
+                "Actualizar",
+                "Estás ejecutando la app desde el código fuente: actualiza con git pull.\n"
+                "Se abrirá la página de la versión nueva en GitHub.")
+            webbrowser.open(update["url"])
+            return
+        if self.btn_download.cget("text") == "Cancelar":
+            messagebox.showwarning("Aviso", "Espera a que termine la descarga en curso antes de actualizar.")
+            return
+
+        self._cancel_update = False
+        self._update_progress = 0.0
+        self._set_update_state("downloading", f"Descargando la versión {update['version']}...")
+
+        def download_thread():
+            try:
+                path = updater.download_installer(
+                    update,
+                    progress_callback=lambda f: self.after(0, lambda v=f: self._on_update_progress(v)),
+                    is_cancelled=lambda: self._cancel_update)
+                self.after(0, lambda: self._on_update_downloaded(path))
+            except updater.UpdateCancelled:
+                self.after(0, lambda: self._set_update_state("available", "Descarga cancelada."))
+            except Exception as e:
+                self.after(0, lambda err=e: self._set_update_state(
+                    "available", f"No se pudo descargar la actualización.\n{err}"))
+
+        threading.Thread(target=download_thread, daemon=True).start()
+
+    def _on_update_progress(self, fraction):
+        self._update_progress = fraction
+        if getattr(self, "progress_update", None) and self.progress_update.winfo_exists():
+            self.progress_update.set(fraction)
+            self.label_update_progress.configure(text=f"{int(fraction * 100)}%")
+
+    def _on_update_downloaded(self, path):
+        try:
+            updater.launch_installer(path)
+        except OSError as e:
+            if getattr(e, "winerror", None) == 1223:   # el usuario ha dicho que no en el aviso de UAC
+                self._set_update_state("available", "Instalación cancelada: hacen falta permisos de administrador.")
+            else:
+                self._set_update_state("available", f"No se pudo abrir el instalador.\n{e}")
+            return
+        # El instalador sustituye los ficheros y vuelve a abrir la app al terminar.
+        self._set_update_state("downloading", "Instalando la actualización. La app se cerrará y volverá a abrirse.")
+        self.after(1500, self.destroy)
 
     # ------------------------------------------------------------------ #
     #  SPINNER
@@ -613,6 +826,8 @@ class App(ctk.CTk):
             'default_format': self.combo_default_format.get(),
             'default_quality_video': self.combo_default_video_quality.get(),
             'default_quality_audio': self.combo_default_audio_quality.get(),
+            'check_updates_on_start': self.switch_check_updates.get() == 1,
+            'notified_version': self.config_data.get('notified_version', ''),
         }
         save_config(new_config)
         self.config_data = new_config
