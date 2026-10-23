@@ -9,7 +9,7 @@ from packaging.version import InvalidVersion, Version
 
 from version import __version__
 
-REPO = "CarlosArraiza/Youtube-Downloader"
+REPO = "cali-sb/Youtube-Downloader"
 REPO_URL = f"https://github.com/{REPO}"
 RELEASES_API = f"https://api.github.com/repos/{REPO}/releases"
 INSTALLER_RE = re.compile(r"Setup.*\.exe$", re.IGNORECASE)

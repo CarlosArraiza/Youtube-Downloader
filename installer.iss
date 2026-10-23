@@ -6,7 +6,7 @@
   #error Compila con build.ps1 (o pasa /DMyAppVersion=X.Y.Z a ISCC)
 #endif
 #define MyAppName "YouTube Downloader"
-#define MyAppPublisher "CarlosArraiza"
+#define MyAppPublisher "cali-sb"
 #define MyAppExeName "YouTubeDownloader.exe"
 #define MySourceDir "dist\YouTubeDownloader"
 
