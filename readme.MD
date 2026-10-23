@@ -141,7 +141,3 @@ Youtube-Downloader/
 ├── requirements.txt
 └── README.md
 ```
-
-## Licencia 📄
-
-Este proyecto está bajo la licencia MIT.
